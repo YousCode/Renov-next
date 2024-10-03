@@ -45,6 +45,21 @@ const DateDetails = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
 
+  const saleTimeRef = useRef(null);
+  const clientNameRef = useRef(null);
+  const phoneNumberRef = useRef(null);
+  const addressRef = useRef(null);
+  const orderNumberRef = useRef(null);
+  const workDescriptionRef = useRef(null);
+  const statusRef = useRef(null);
+
+  const handleKeyPress = (e, nextFieldRef) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      nextFieldRef.current.focus();
+    }
+  };
+
   const defaultNewSale = {
     clientName: "",
     phoneNumber: "",
@@ -130,7 +145,6 @@ const DateDetails = () => {
       const resultValueStr = sale["RESULTAT"] ? sale["RESULTAT"].replace(/[^0-9.-]+/g, "") : "0";
       const resultValue = parseFloat(resultValueStr) || 0;
 
-      // Check for numeric values in the ETAT field
       const statusValue = sale["ETAT"] ? sale["ETAT"].match(/\d+/) : null;
       const statusNumber = statusValue ? parseFloat(statusValue[0]) : 0;
 
@@ -228,13 +242,12 @@ const DateDetails = () => {
       console.error("Error saving new sale:", error.message);
     }
   };
+
   const handleEditSaveClick = (index, saleId) => {
     if (editingIndex === index) {
-      // If the row is already being edited, save the changes
       handleEditSale(saleId, index);
-      setEditingIndex(null); // Exit the editing mode
+      setEditingIndex(null); 
     } else {
-      // If the row is not being edited, enter the editing mode
       setEditingIndex(index);
     }
   };
@@ -363,6 +376,7 @@ const DateDetails = () => {
                             type="time"
                             value={new Date(sale["DATE DE VENTE"]).toLocaleTimeString("fr-FR", { timeZone: "UTC" })}
                             onChange={(e) => handleInputChange(e, index, "DATE DE VENTE", e.target.value)}
+                            onKeyDown={(e) => handleKeyPress(e, clientNameRef)}
                           />
                         ) : (
                           new Date(sale["DATE DE VENTE"]).toLocaleTimeString("fr-FR", { timeZone: "UTC" })
@@ -371,11 +385,13 @@ const DateDetails = () => {
                       <td className="text-black px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                         {index === editingIndex ? (
                           <input
+                            ref={clientNameRef}
                             className="border p-2 rounded-md w-full"
                             type="text"
                             name="clientName"
                             value={sale["NOM DU CLIENT"]}
                             onChange={(e) => handleInputChange(e, index, "NOM DU CLIENT", e.target.value)}
+                            onKeyDown={(e) => handleKeyPress(e, phoneNumberRef)}
                           />
                         ) : (
                           sale["NOM DU CLIENT"]
@@ -384,11 +400,13 @@ const DateDetails = () => {
                       <td className="text-black px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                         {index === editingIndex ? (
                           <input
+                            ref={phoneNumberRef}
                             className="border p-2 rounded-md w-full"
                             type="text"
                             name="phoneNumber"
                             value={formatPhoneNumber(sale["TELEPHONE"])}
                             onChange={(e) => handleInputChange(e, index, "TELEPHONE", e.target.value)}
+                            onKeyDown={(e) => handleKeyPress(e, addressRef)}
                           />
                         ) : (
                           formatPhoneNumber(sale["TELEPHONE"])
@@ -397,11 +415,13 @@ const DateDetails = () => {
                       <td className="text-black px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                         {index === editingIndex ? (
                           <input
+                            ref={addressRef}
                             className="border p-2 rounded-md w-full"
                             type="text"
                             name="address"
                             value={sale["ADRESSE DU CLIENT"]}
                             onChange={(e) => handleInputChange(e, index, "ADRESSE DU CLIENT", e.target.value)}
+                            onKeyDown={(e) => handleKeyPress(e, orderNumberRef)}
                           />
                         ) : (
                           sale["ADRESSE DU CLIENT"]
@@ -410,24 +430,28 @@ const DateDetails = () => {
                       <td className="text-black px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                         {index === editingIndex ? (
                           <input
+                            ref={orderNumberRef}
                             className="border p-2 rounded-md w-full"
                             type="text"
                             name="orderNumber"
                             value={sale["VENDEUR"]}
                             onChange={(e) => handleInputChange(e, index, "VENDEUR", e.target.value)}
+                            onKeyDown={(e) => handleKeyPress(e, workDescriptionRef)}
                           />
                         ) : (
                           sale["VENDEUR"]
                         )}
                       </td>
                       <td className="text-black px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
-                        {index === editingIndex ? (
+                      {index === editingIndex ? (
                           <input
+                            ref={workDescriptionRef}
                             className="border p-2 rounded-md w-full"
                             type="text"
                             name="workDescription"
                             value={sale["DESIGNATION"]}
                             onChange={(e) => handleInputChange(e, index, "DESIGNATION", e.target.value)}
+                            onKeyDown={(e) => handleKeyPress(e, statusRef)}
                           />
                         ) : (
                           sale["DESIGNATION"]
@@ -436,6 +460,7 @@ const DateDetails = () => {
                       <td className="text-black px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                         {index === editingIndex ? (
                           <input
+                            ref={statusRef}
                             className="border p-2 text-black rounded-md w-full"
                             type="text"
                             name="status"
@@ -470,39 +495,31 @@ const DateDetails = () => {
                           >
                             <FontAwesomeIcon icon={faTrash} />
                           </button>
-                          {/* <button
-                            // onClick={() =>}
-                            className="bg-green-500 text-white p-2 rounded-md"
-                            title="File"
-                          >
-                            <FontAwesomeIcon icon={faFile} />
-                          </button> */}
                         </div>
                       </td>
-
                     </tr>
                   ))}
                   <tr>
                     <td className="px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                       <input
+                        ref={saleTimeRef}
                         className="border text-black p-2 rounded-md w-full"
                         type="time"
                         name="saleTime"
                         value={newSale.saleTime}
                         onChange={(e) => handleInputChange(e, -1, "saleTime", e.target.value)}
+                        onKeyDown={(e) => handleKeyPress(e, clientNameRef)}
                       />
                     </td>
                     <td className="px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                       <input
+                        ref={clientNameRef}
                         className="border p-2 rounded-md w-full"
                         type="text"
                         name="clientName"
                         value={newSale.clientName}
                         onChange={(e) => handleInputChange(e, -1, "clientName", e.target.value)}
-                        onBlur={() => setSearchResults([])}
-                        onFocus={() =>
-                          newSale.clientName.length > 2 && setSearchResults(searchResults)
-                        }
+                        onKeyDown={(e) => handleKeyPress(e, phoneNumberRef)}
                         required
                       />
                       {isSearching && <div>Searching...</div>}
@@ -522,21 +539,25 @@ const DateDetails = () => {
                     </td>
                     <td className="px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap text-black border border-black">
                       <input
+                        ref={phoneNumberRef}
                         className="border text-black p-2 rounded-md w-full"
                         type="text"
                         name="phoneNumber"
                         value={formatPhoneNumber(newSale.phoneNumber)}
                         onChange={(e) => handleInputChange(e, -1, "phoneNumber", e.target.value)}
+                        onKeyDown={(e) => handleKeyPress(e, addressRef)}
                         required
                       />
                     </td>
                     <td className="px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                       <input
+                        ref={addressRef}
                         className="border p-2 rounded-md w-full"
                         type="text"
                         name="address"
                         value={newSale.address}
                         onChange={(e) => handleInputChange(e, -1, "address", e.target.value)}
+                        onKeyDown={(e) => handleKeyPress(e, orderNumberRef)}
                         required
                         list="city-options"
                       />
@@ -548,11 +569,13 @@ const DateDetails = () => {
                     </td>
                     <td className="px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                       <input
+                        ref={orderNumberRef}
                         className="border p-2 rounded-md w-full"
                         type="text"
                         name="orderNumber"
                         value={newSale.orderNumber}
                         onChange={(e) => handleInputChange(e, -1, "orderNumber", e.target.value)}
+                        onKeyDown={(e) => handleKeyPress(e, workDescriptionRef)}
                         required
                         list="vendor-options"
                       />
@@ -564,16 +587,19 @@ const DateDetails = () => {
                     </td>
                     <td className="px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                       <input
+                        ref={workDescriptionRef}
                         className="border p-2 rounded-md w-full"
                         type="text"
                         name="workDescription"
                         value={newSale.workDescription}
                         onChange={(e) => handleInputChange(e, -1, "workDescription", e.target.value)}
+                        onKeyDown={(e) => handleKeyPress(e, statusRef)}
                         required
                       />
                     </td>
                     <td className="px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                       <input
+                        ref={statusRef}
                         className="border p-2 text-black rounded-md w-full"
                         type="text"
                         name="status"
@@ -601,9 +627,6 @@ const DateDetails = () => {
                   </tr>
                   {Array.from({ length: emptyRowsCount }).map((_, index) => (
                     <tr key={`empty-${index}`}>
-                      <td className="px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
-                        &nbsp;
-                      </td>
                       <td className="px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                         &nbsp;
                       </td>
@@ -658,3 +681,4 @@ const DateDetails = () => {
 };
 
 export default DateDetails;
+   
