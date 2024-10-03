@@ -379,7 +379,7 @@ const DateDetails = () => {
                             onKeyDown={(e) => handleKeyPress(e, clientNameRef)}
                           />
                         ) : (
-                          new Date(sale["DATE DE VENTE"]).toLocaleTimeString("fr-FR", { timeZone: "UTC" })
+                          `${new Date(sale["DATE DE VENTE"]).toLocaleTimeString("fr-FR", { timeZone: "UTC", hour: '2-digit', minute: '2-digit' })} H`
                         )}
                       </td>
                       <td className="text-black px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
