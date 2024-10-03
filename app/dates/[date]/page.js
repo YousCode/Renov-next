@@ -6,14 +6,14 @@ import Navbar from "@/components/Navbar";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEdit, faTrash, faFile } from "@fortawesome/free-solid-svg-icons";
+import { faEdit, faTrash } from "@fortawesome/free-solid-svg-icons";
 
 const importCities = async () => {
-  return (await import('./cities.json')).default;
+  return (await import("./cities.json")).default;
 };
 
 const importVendors = async () => {
-  return (await import('./vendors.json')).default;
+  return (await import("./vendors.json")).default;
 };
 
 const generateUniqueBCNumber = (existingBCNumbers) => {
@@ -75,7 +75,15 @@ const DateDetails = () => {
   const MySwal = withReactContent(Swal);
 
   const formatDate = (dateStr) => {
-    const days = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+    const days = [
+      "Dimanche",
+      "Lundi",
+      "Mardi",
+      "Mercredi",
+      "Jeudi",
+      "Vendredi",
+      "Samedi",
+    ];
     const dateObj = new Date(dateStr);
     const dayName = days[dateObj.getUTCDay()];
     const day = String(dateObj.getUTCDate()).padStart(2, "0");
@@ -87,7 +95,9 @@ const DateDetails = () => {
   const normalizeDate = (dateStr) => {
     if (dateStr.includes("/")) {
       const [year, month, day] = dateStr.split("/");
-      return new Date(`${year}-${month}-${day}T00:00:00.000Z`).toISOString().split("T")[0];
+      return new Date(`${year}-${month}-${day}T00:00:00.000Z`)
+        .toISOString()
+        .split("T")[0];
     }
     return new Date(dateStr).toISOString().split("T")[0];
   };
@@ -127,14 +137,20 @@ const DateDetails = () => {
   useEffect(() => {
     if (!date || !sales.length) return;
 
-    const normalizedInputDate = new Date(`${date}T00:00:00.000Z`).toISOString().split("T")[0];
+    const normalizedInputDate = new Date(`${date}T00:00:00.000Z`)
+      .toISOString()
+      .split("T")[0];
 
     const filtered = sales.filter((sale) => {
       const saleDate = normalizeDate(sale["DATE DE VENTE"]);
       return saleDate === normalizedInputDate;
     });
 
-    filtered.sort((a, b) => new Date(a["DATE DE VENTE"]).getTime() - new Date(b["DATE DE VENTE"]).getTime());
+    filtered.sort(
+      (a, b) =>
+        new Date(a["DATE DE VENTE"]).getTime() -
+        new Date(b["DATE DE VENTE"]).getTime()
+    );
 
     setFilteredSales(filtered);
     calculateTotalAmount(filtered);
@@ -142,7 +158,9 @@ const DateDetails = () => {
 
   const calculateTotalAmount = (salesData) => {
     const total = salesData.reduce((sum, sale) => {
-      const resultValueStr = sale["RESULTAT"] ? sale["RESULTAT"].replace(/[^0-9.-]+/g, "") : "0";
+      const resultValueStr = sale["RESULTAT"]
+        ? sale["RESULTAT"].replace(/[^0-9.-]+/g, "")
+        : "0";
       const resultValue = parseFloat(resultValueStr) || 0;
 
       const statusValue = sale["ETAT"] ? sale["ETAT"].match(/\d+/) : null;
@@ -157,7 +175,9 @@ const DateDetails = () => {
   const performSearch = async (searchTerm) => {
     setIsSearching(true);
     try {
-      const response = await fetch(`/api/ventes/search?searchTerm=${encodeURIComponent(searchTerm)}`);
+      const response = await fetch(
+        `/api/ventes/search?searchTerm=${encodeURIComponent(searchTerm)}`
+      );
       if (!response.ok) {
         throw new Error(`Failed to fetch: ${response.statusText}`);
       }
@@ -185,6 +205,16 @@ const DateDetails = () => {
 
     if (field === "clientName" && value.length > 2) {
       performSearch(value);
+      const matchingSale = sales.find(
+        (sale) => sale["NOM DU CLIENT"].toUpperCase() === value.toUpperCase()
+      );
+      if (matchingSale) {
+        setNewSale((prev) => ({
+          ...prev,
+          phoneNumber: matchingSale["TELEPHONE"],
+          address: matchingSale["ADRESSE DU CLIENT"],
+        }));
+      }
     } else {
       setSearchResults([]);
     }
@@ -197,6 +227,7 @@ const DateDetails = () => {
       clientName: sale["NOM DU CLIENT"].toUpperCase(),
       phoneNumber: sale["TELEPHONE"],
       orderNumber: sale["VENDEUR"].toUpperCase(),
+      address: sale["ADRESSE DU CLIENT"],
     }));
     setSearchResults([]);
   };
@@ -246,7 +277,7 @@ const DateDetails = () => {
   const handleEditSaveClick = (index, saleId) => {
     if (editingIndex === index) {
       handleEditSale(saleId, index);
-      setEditingIndex(null); 
+      setEditingIndex(null);
     } else {
       setEditingIndex(index);
     }
@@ -288,7 +319,9 @@ const DateDetails = () => {
       }
       const updatedSales = sales.filter((sale) => sale._id !== saleId);
       setSales(updatedSales);
-      const updatedFilteredSales = filteredSales.filter((sale) => sale._id !== saleId);
+      const updatedFilteredSales = filteredSales.filter(
+        (sale) => sale._id !== saleId
+      );
       setFilteredSales(updatedFilteredSales);
       calculateTotalAmount(updatedFilteredSales);
     } catch (error) {
@@ -374,12 +407,28 @@ const DateDetails = () => {
                           <input
                             className="border text-black p-2 rounded-md w-full"
                             type="time"
-                            value={new Date(sale["DATE DE VENTE"]).toLocaleTimeString("fr-FR", { timeZone: "UTC" })}
-                            onChange={(e) => handleInputChange(e, index, "DATE DE VENTE", e.target.value)}
+                            value={new Date(
+                              sale["DATE DE VENTE"]
+                            ).toLocaleTimeString("fr-FR", { timeZone: "UTC" })}
+                            onChange={(e) =>
+                              handleInputChange(
+                                e,
+                                index,
+                                "DATE DE VENTE",
+                                e.target.value
+                              )
+                            }
                             onKeyDown={(e) => handleKeyPress(e, clientNameRef)}
                           />
                         ) : (
-                          `${new Date(sale["DATE DE VENTE"]).toLocaleTimeString("fr-FR", { timeZone: "UTC", hour: '2-digit', minute: '2-digit' })} H`
+                          `${new Date(sale["DATE DE VENTE"]).toLocaleTimeString(
+                            "fr-FR",
+                            {
+                              timeZone: "UTC",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )} H`
                         )}
                       </td>
                       <td className="text-black px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
@@ -390,7 +439,14 @@ const DateDetails = () => {
                             type="text"
                             name="clientName"
                             value={sale["NOM DU CLIENT"]}
-                            onChange={(e) => handleInputChange(e, index, "NOM DU CLIENT", e.target.value)}
+                            onChange={(e) =>
+                              handleInputChange(
+                                e,
+                                index,
+                                "NOM DU CLIENT",
+                                e.target.value
+                              )
+                            }
                             onKeyDown={(e) => handleKeyPress(e, phoneNumberRef)}
                           />
                         ) : (
@@ -405,7 +461,14 @@ const DateDetails = () => {
                             type="text"
                             name="phoneNumber"
                             value={formatPhoneNumber(sale["TELEPHONE"])}
-                            onChange={(e) => handleInputChange(e, index, "TELEPHONE", e.target.value)}
+                            onChange={(e) =>
+                              handleInputChange(
+                                e,
+                                index,
+                                "TELEPHONE",
+                                e.target.value
+                              )
+                            }
                             onKeyDown={(e) => handleKeyPress(e, addressRef)}
                           />
                         ) : (
@@ -420,7 +483,14 @@ const DateDetails = () => {
                             type="text"
                             name="address"
                             value={sale["ADRESSE DU CLIENT"]}
-                            onChange={(e) => handleInputChange(e, index, "ADRESSE DU CLIENT", e.target.value)}
+                            onChange={(e) =>
+                              handleInputChange(
+                                e,
+                                index,
+                                "ADRESSE DU CLIENT",
+                                e.target.value
+                              )
+                            }
                             onKeyDown={(e) => handleKeyPress(e, orderNumberRef)}
                           />
                         ) : (
@@ -435,22 +505,38 @@ const DateDetails = () => {
                             type="text"
                             name="orderNumber"
                             value={sale["VENDEUR"]}
-                            onChange={(e) => handleInputChange(e, index, "VENDEUR", e.target.value)}
-                            onKeyDown={(e) => handleKeyPress(e, workDescriptionRef)}
+                            onChange={(e) =>
+                              handleInputChange(
+                                e,
+                                index,
+                                "VENDEUR",
+                                e.target.value
+                              )
+                            }
+                            onKeyDown={(e) =>
+                              handleKeyPress(e, workDescriptionRef)
+                            }
                           />
                         ) : (
                           sale["VENDEUR"]
                         )}
                       </td>
                       <td className="text-black px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
-                      {index === editingIndex ? (
+                        {index === editingIndex ? (
                           <input
                             ref={workDescriptionRef}
                             className="border p-2 rounded-md w-full"
                             type="text"
                             name="workDescription"
                             value={sale["DESIGNATION"]}
-                            onChange={(e) => handleInputChange(e, index, "DESIGNATION", e.target.value)}
+                            onChange={(e) =>
+                              handleInputChange(
+                                e,
+                                index,
+                                "DESIGNATION",
+                                e.target.value
+                              )
+                            }
                             onKeyDown={(e) => handleKeyPress(e, statusRef)}
                           />
                         ) : (
@@ -465,7 +551,14 @@ const DateDetails = () => {
                             type="text"
                             name="status"
                             value={sale["ETAT"]}
-                            onChange={(e) => handleInputChange(e, index, "ETAT", e.target.value)}
+                            onChange={(e) =>
+                              handleInputChange(
+                                e,
+                                index,
+                                "ETAT",
+                                e.target.value
+                              )
+                            }
                             list="status-options"
                           />
                         ) : (
@@ -481,11 +574,15 @@ const DateDetails = () => {
                       <td className="text-black px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
                         <div className="flex space-x-2">
                           <button
-                            onClick={() => handleEditSaveClick(index, sale["_id"])}
-                            className={`bg-${editingIndex === index ? "green" : "blue"}-500 text-white p-2 rounded-md`}
+                            onClick={() =>
+                              handleEditSaveClick(index, sale["_id"])
+                            }
+                            className={`bg-${
+                              editingIndex === index ? "green" : "blue"
+                            }-500 text-white p-2 rounded-md`}
                             title={editingIndex === index ? "Save" : "Edit"}
                           >
-                            <FontAwesomeIcon icon={editingIndex === index ? faEdit : faEdit} />
+                            <FontAwesomeIcon icon={faEdit} />
                           </button>
 
                           <button
@@ -507,7 +604,9 @@ const DateDetails = () => {
                         type="time"
                         name="saleTime"
                         value={newSale.saleTime}
-                        onChange={(e) => handleInputChange(e, -1, "saleTime", e.target.value)}
+                        onChange={(e) =>
+                          handleInputChange(e, -1, "saleTime", e.target.value)
+                        }
                         onKeyDown={(e) => handleKeyPress(e, clientNameRef)}
                       />
                     </td>
@@ -518,7 +617,9 @@ const DateDetails = () => {
                         type="text"
                         name="clientName"
                         value={newSale.clientName}
-                        onChange={(e) => handleInputChange(e, -1, "clientName", e.target.value)}
+                        onChange={(e) =>
+                          handleInputChange(e, -1, "clientName", e.target.value)
+                        }
                         onKeyDown={(e) => handleKeyPress(e, phoneNumberRef)}
                         required
                       />
@@ -529,7 +630,9 @@ const DateDetails = () => {
                             <li
                               key={index}
                               className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-200"
-                              onMouseDown={(event) => handleSelectSale(sale, event)}
+                              onMouseDown={(event) =>
+                                handleSelectSale(sale, event)
+                              } // Appelle la fonction qui remplit les champs
                             >
                               {sale["NOM DU CLIENT"]} - {sale["TELEPHONE"]}
                             </li>
@@ -544,7 +647,14 @@ const DateDetails = () => {
                         type="text"
                         name="phoneNumber"
                         value={formatPhoneNumber(newSale.phoneNumber)}
-                        onChange={(e) => handleInputChange(e, -1, "phoneNumber", e.target.value)}
+                        onChange={(e) =>
+                          handleInputChange(
+                            e,
+                            -1,
+                            "phoneNumber",
+                            e.target.value
+                          )
+                        }
                         onKeyDown={(e) => handleKeyPress(e, addressRef)}
                         required
                       />
@@ -556,7 +666,9 @@ const DateDetails = () => {
                         type="text"
                         name="address"
                         value={newSale.address}
-                        onChange={(e) => handleInputChange(e, -1, "address", e.target.value)}
+                        onChange={(e) =>
+                          handleInputChange(e, -1, "address", e.target.value)
+                        }
                         onKeyDown={(e) => handleKeyPress(e, orderNumberRef)}
                         required
                         list="city-options"
@@ -574,7 +686,14 @@ const DateDetails = () => {
                         type="text"
                         name="orderNumber"
                         value={newSale.orderNumber}
-                        onChange={(e) => handleInputChange(e, -1, "orderNumber", e.target.value)}
+                        onChange={(e) =>
+                          handleInputChange(
+                            e,
+                            -1,
+                            "orderNumber",
+                            e.target.value
+                          )
+                        }
                         onKeyDown={(e) => handleKeyPress(e, workDescriptionRef)}
                         required
                         list="vendor-options"
@@ -592,7 +711,14 @@ const DateDetails = () => {
                         type="text"
                         name="workDescription"
                         value={newSale.workDescription}
-                        onChange={(e) => handleInputChange(e, -1, "workDescription", e.target.value)}
+                        onChange={(e) =>
+                          handleInputChange(
+                            e,
+                            -1,
+                            "workDescription",
+                            e.target.value
+                          )
+                        }
                         onKeyDown={(e) => handleKeyPress(e, statusRef)}
                         required
                       />
@@ -604,7 +730,9 @@ const DateDetails = () => {
                         type="text"
                         name="status"
                         value={newSale.status}
-                        onChange={(e) => handleInputChange(e, -1, "status", e.target.value)}
+                        onChange={(e) =>
+                          handleInputChange(e, -1, "status", e.target.value)
+                        }
                         required
                         list="status-options"
                       />
@@ -654,20 +782,27 @@ const DateDetails = () => {
               </table>
             </div>
             <div className="flex justify-end items-center mt-4">
-              <label className="mr-2 text-lg font-bold" style={{ color: 'orange' }}>Total €:</label>
-              <span className="text-lg font-bold">{totalAmount.toFixed(2)}</span>
+              <label
+                className="mr-2 text-lg font-bold"
+                style={{ color: "orange" }}
+              >
+                Total €:
+              </label>
+              <span className="text-lg font-bold">
+                {totalAmount.toFixed(2)}
+              </span>
             </div>
             <button
               onClick={() => {
                 MySwal.fire({
-                  title: 'Succès',
-                  text: 'Le planning a été validé avec succès',
-                  icon: 'success',
-                  confirmButtonText: 'OK'
+                  title: "Succès",
+                  text: "Le planning a été validé avec succès",
+                  icon: "success",
+                  confirmButtonText: "OK",
                 }).then(() => {
                   router.push("/dashboard");
                 });
-                new Audio('/bell-sound.mp3').play();
+                new Audio("/bell-sound.mp3").play();
               }}
               className="bg-blue-500 text-white py-2 px-4 rounded-md mt-4 hover:bg-blue-600 transition duration-300"
             >
@@ -681,4 +816,3 @@ const DateDetails = () => {
 };
 
 export default DateDetails;
-   
