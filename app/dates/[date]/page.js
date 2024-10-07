@@ -212,7 +212,7 @@ const DateDetails = () => {
         setNewSale((prev) => ({
           ...prev,
           phoneNumber: matchingSale["TELEPHONE"],
-          address: matchingSale["ADRESSE DU CLIENT"],
+          address: matchingSale["VILLE"],
         }));
       }
     } else {
@@ -227,7 +227,7 @@ const DateDetails = () => {
       clientName: sale["NOM DU CLIENT"].toUpperCase(),
       phoneNumber: sale["TELEPHONE"],
       orderNumber: sale["VENDEUR"].toUpperCase(),
-      address: sale["ADRESSE DU CLIENT"],
+      address: sale["VILLE"],
     }));
     setSearchResults([]);
   };
@@ -245,7 +245,7 @@ const DateDetails = () => {
       "DATE DE VENTE": saleDate.toISOString(),
       "NOM DU CLIENT": newSale.clientName.toUpperCase(),
       TELEPHONE: newSale.phoneNumber,
-      "ADRESSE DU CLIENT": newSale.address.toUpperCase(),
+      "VILLE": newSale.address.toUpperCase(),
       "NUMERO BC": numeroBC,
       VENDEUR: newSale.orderNumber.toUpperCase(),
       DESIGNATION: newSale.workDescription.toUpperCase(),
@@ -482,19 +482,19 @@ const DateDetails = () => {
                             className="border p-2 rounded-md w-full"
                             type="text"
                             name="address"
-                            value={sale["ADRESSE DU CLIENT"]}
+                            value={sale["VILLE"]}
                             onChange={(e) =>
                               handleInputChange(
                                 e,
                                 index,
-                                "ADRESSE DU CLIENT",
+                                "VILLE",
                                 e.target.value
                               )
                             }
                             onKeyDown={(e) => handleKeyPress(e, orderNumberRef)}
                           />
                         ) : (
-                          sale["ADRESSE DU CLIENT"]
+                          sale["VILLE"]
                         )}
                       </td>
                       <td className="text-black px-2 py-1 md:px-4 md:py-2 lg:px-6 lg:py-3 whitespace-nowrap border border-black">
