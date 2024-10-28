@@ -175,17 +175,25 @@ const DateDetails = () => {
   const performSearch = async (searchTerm) => {
     setIsSearching(true);
     try {
-      const response = await fetch(
-        `/api/ventes/search?searchTerm=${encodeURIComponent(searchTerm)}`
-      );
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.statusText}`);
-      }
-      const data = await response.json();
-      if (data.success) {
-        setSearchResults(data.data);
+      // Vérifier si le terme de recherche est valide (au moins 2 caractères)
+      if (searchTerm.length > 1) {
+        const response = await fetch(
+          `/api/ventes/search?searchTerm=${encodeURIComponent(searchTerm)}`
+        );
+        if (!response.ok) {
+          throw new Error(`Failed to fetch: ${response.statusText}`);
+        }
+        const data = await response.json();
+        if (data.success) {
+          // Filtrer les résultats en fonction du nom qui commence par le terme saisi
+          setSearchResults(data.data.filter(sale =>
+            sale["NOM DU CLIENT"].toUpperCase().startsWith(searchTerm.toUpperCase())
+          ));
+        } else {
+          setSearchResults([]);
+        }
       } else {
-        setSearchResults([]);
+        setSearchResults([]); // Pas de recherche si le terme est trop court
       }
     } catch (error) {
       console.error("Search error:", error);
@@ -193,7 +201,7 @@ const DateDetails = () => {
       setIsSearching(false);
     }
   };
-
+  
   const handleInputChange = (e, index, field, value) => {
     if (index === -1) {
       setNewSale((prev) => ({ ...prev, [field]: value.toUpperCase() }));
@@ -202,8 +210,9 @@ const DateDetails = () => {
       updatedSales[index][field] = value.toUpperCase();
       setFilteredSales(updatedSales);
     }
-
-    if (field === "clientName" && value.length > 2) {
+  
+    // Exécuter la recherche seulement sur le champ 'clientName'
+    if (field === "clientName") {
       performSearch(value);
       const matchingSale = sales.find(
         (sale) => sale["NOM DU CLIENT"].toUpperCase() === value.toUpperCase()
@@ -219,7 +228,6 @@ const DateDetails = () => {
       setSearchResults([]);
     }
   };
-
   const handleSelectSale = (sale, event) => {
     event.stopPropagation();
     setNewSale((prev) => ({
