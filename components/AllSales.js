@@ -2,8 +2,14 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Tesseract from "tesseract.js";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEdit, faFile } from "@fortawesome/free-solid-svg-icons";
+import {
+  faEdit,
+  faFile,
+  faMoneyBillWave,
+  faTimes,
+} from "@fortawesome/free-solid-svg-icons";
 
 const normalizeString = (str) => {
   return str
@@ -62,12 +68,12 @@ const EXCLUDED_STATES = [
   "nd copine intervenue",
   "nd enfants s'occupent",
   "rdv reporté",
-  "ND PERCHÉ",
   "nd mr veut pas",
 ];
 
 const isExcludedState = (etat) => {
-  if (!etat) return true;
+  // Ne pas exclure les ventes avec un état vide
+  if (!etat) return false;
 
   const normalizedEtat = normalizeString(etat);
 
@@ -91,38 +97,46 @@ const AllSales = () => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState("asc");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedSale, setSelectedSale] = useState(null);
+  const [payments, setPayments] = useState([]);
+  const [newPaymentAmount, setNewPaymentAmount] = useState("");
+  const [newPaymentDate, setNewPaymentDate] = useState("");
+  const [ocrLoading, setOcrLoading] = useState(false);
   const router = useRouter();
 
   const tableRef = useRef(null);
 
   useEffect(() => {
-    const fetchSales = async () => {
-      try {
-        const response = await fetch("/api/ventes");
-        if (!response.ok) {
-          throw new Error(
-            `Échec de la récupération des ventes : ${response.statusText}`
-          );
-        }
-        const data = await response.json();
-        setSales(data.data);
-        filterSalesByDate(data.data);
-      } catch (error) {
-        console.error("Erreur lors de la récupération des ventes :", error);
-        setError(`Erreur : ${error.message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchSales();
   }, [selectedMonth, selectedYear]);
+
+  const fetchSales = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/ventes");
+      if (!response.ok) {
+        throw new Error(
+          `Échec de la récupération des ventes : ${response.statusText}`
+        );
+      }
+      const data = await response.json();
+      setSales(data.data);
+      filterSalesByDate(data.data);
+    } catch (error) {
+      console.error("Erreur lors de la récupération des ventes :", error);
+      setError(`Erreur : ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filterSalesByDate = (salesData) => {
     const filtered = salesData.filter((sale) => {
       const saleDate = new Date(sale["DATE DE VENTE"]);
       const etat = normalizeString(sale.ETAT || "");
 
-      // Exclure les états spécifiés et ceux commençant par "nd"
+      // Inclure les ventes même si l'état est vide
       return (
         saleDate.getMonth() === selectedMonth &&
         saleDate.getFullYear() === selectedYear &&
@@ -143,12 +157,12 @@ const AllSales = () => {
   const handleSearchChange = (e) => {
     const term = normalizeString(e.target.value);
     setSearchTerm(term);
-    
+
     const filtered = sales.filter(
       (sale) =>
-        normalizeString(sale["NOM DU CLIENT"]).startsWith(term) ||
-        normalizeString(sale["TELEPHONE"]).startsWith(term) ||
-        normalizeString(sale["ADRESSE DU CLIENT"]).startsWith(term)
+        normalizeString(sale["NOM DU CLIENT"]).includes(term) ||
+        normalizeString(sale["TELEPHONE"]).includes(term) ||
+        normalizeString(sale["ADRESSE DU CLIENT"]).includes(term)
     );
     setFilteredSales(filtered);
   };
@@ -163,6 +177,93 @@ const AllSales = () => {
         return newSortOrder === "asc" ? dateA - dateB : dateB - dateA;
       })
     );
+  };
+
+  // Fonction pour gérer le double-clic sur une ligne de vente
+  const handleRowDoubleClick = (sale) => {
+    setSelectedSale(sale);
+    // Initialiser les paiements à partir de la vente ou vide
+    setPayments(sale.payments || []);
+    setIsModalOpen(true);
+  };
+
+  // Fonction pour ajouter un nouveau paiement
+  const handleAddPayment = () => {
+    if (!newPaymentAmount || !newPaymentDate) {
+      alert("Veuillez remplir tous les champs de paiement.");
+      return;
+    }
+
+    const newPayment = {
+      montant: parseFloat(newPaymentAmount),
+      date: newPaymentDate,
+      id: Date.now(), // ID temporaire pour le mapping
+    };
+
+    setPayments((prevPayments) => [...prevPayments, newPayment]);
+
+    // Mettre à jour les paiements dans l'état des ventes
+    setSales((prevSales) =>
+      prevSales.map((s) =>
+        s._id === selectedSale._id
+          ? { ...s, payments: [...(s.payments || []), newPayment] }
+          : s
+      )
+    );
+
+    setNewPaymentAmount("");
+    setNewPaymentDate("");
+  };
+
+  // Fonction pour gérer le téléchargement d'une image et l'extraction du montant via OCR
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setOcrLoading(true);
+
+    try {
+      const {
+        data: { text },
+      } = await Tesseract.recognize(file, "fra");
+      const amount = extractAmountFromText(text);
+      if (amount) {
+        setNewPaymentAmount(amount);
+      } else {
+        alert("Aucun montant détecté dans l'image.");
+      }
+    } catch (error) {
+      console.error("Erreur lors de la reconnaissance OCR :", error);
+      alert("Erreur lors de la reconnaissance OCR.");
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  // Fonction pour extraire le montant du texte OCR
+  const extractAmountFromText = (text) => {
+    const regex = /(\d+[\.,\s]\d{2})/g;
+    const matches = text.match(regex);
+    if (matches && matches.length > 0) {
+      // On prend le premier montant trouvé
+      return matches[0].replace(",", ".").replace(" ", "");
+    }
+    return null;
+  };
+
+  // Calcul du montant total payé
+  const calculateTotalPaid = () => {
+    return payments.reduce((sum, payment) => sum + payment.montant, 0);
+  };
+
+  // Calcul de la progression du paiement
+  const calculateProgress = () => {
+    const totalPaid = calculateTotalPaid();
+    const totalAmount =
+      parseFloat(selectedSale["MONTANT TTC"]) ||
+      parseFloat(selectedSale["MONTANT HT"]) ||
+      0;
+    return totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
   };
 
   if (loading)
@@ -235,6 +336,7 @@ const AllSales = () => {
                     ? "animate-blink-yellow"
                     : "bg-white"
                 }`}
+                onDoubleClick={() => handleRowDoubleClick(sale)}
               >
                 <td className="border px-4 py-2">
                   {formatDate(sale["DATE DE VENTE"])}
@@ -248,13 +350,17 @@ const AllSales = () => {
                   {sale.VILLE || "Ville manquante"}
                 </td>
                 <td className="border px-4 py-2">
-                  {sale["MONTANT TTC"] ? formatNumber(sale["MONTANT TTC"]) : "N/A"}
+                  {sale["MONTANT TTC"]
+                    ? formatNumber(sale["MONTANT TTC"])
+                    : "N/A"}
                 </td>
                 <td className="border px-4 py-2">
-                  {sale["MONTANT HT"] ? formatNumber(sale["MONTANT HT"]) : "N/A"}
+                  {sale["MONTANT HT"]
+                    ? formatNumber(sale["MONTANT HT"])
+                    : "N/A"}
                 </td>
                 <td className="border px-4 py-2">
-                  {sale.ETAT || "État inconnu"}
+                  {sale.ETAT || "" /* Ne pas afficher "État inconnu" */}
                 </td>
                 <td className="border px-4 py-2 flex justify-center space-x-2">
                   <button
@@ -269,6 +375,12 @@ const AllSales = () => {
                   >
                     <FontAwesomeIcon icon={faFile} />
                   </button>
+                  <button
+                    onClick={() => handleRowDoubleClick(sale)}
+                    className="px-2 py-1 bg-yellow-500 text-white rounded-lg ml-2"
+                  >
+                    <FontAwesomeIcon icon={faMoneyBillWave} />
+                  </button>
                 </td>
               </tr>
             ))}
@@ -276,14 +388,109 @@ const AllSales = () => {
         </table>
       </div>
 
+      {/* Modal pour gérer les paiements */}
+      {isModalOpen && selectedSale && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-white w-11/12 md:w-2/3 lg:w-1/2 p-4 rounded-lg">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">
+                Paiements pour {selectedSale["NOM DU CLIENT"]}
+              </h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-600 hover:text-gray-800"
+              >
+                <FontAwesomeIcon icon={faTimes} size="lg" />
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <div className="w-full bg-gray-200 rounded-full h-4 mb-4">
+                <div
+                  className="bg-green-500 h-4 rounded-full"
+                  style={{ width: `${calculateProgress()}%` }}
+                ></div>
+              </div>
+              <p>
+                Montant total :{" "}
+                {formatNumber(
+                  parseFloat(selectedSale["MONTANT TTC"]) ||
+                    parseFloat(selectedSale["MONTANT HT"]) ||
+                    0
+                )}
+              </p>
+              <p>Montant payé : {formatNumber(calculateTotalPaid())}</p>
+              <p>
+                Montant restant :{" "}
+                {formatNumber(
+                  (parseFloat(selectedSale["MONTANT TTC"]) ||
+                    parseFloat(selectedSale["MONTANT HT"]) ||
+                    0) - calculateTotalPaid()
+                )}
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <h3 className="font-bold mb-2">Historique des paiements :</h3>
+              <ul>
+                {payments.map((payment) => (
+                  <li key={payment.id}>
+                    {formatDate(payment.date)} - {formatNumber(payment.montant)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="mb-4">
+              <h3 className="font-bold mb-2">Ajouter un paiement :</h3>
+              <div className="flex flex-col space-y-2">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={newPaymentAmount}
+                  onChange={(e) => setNewPaymentAmount(e.target.value)}
+                  placeholder="Montant"
+                  className="p-2 border border-gray-300 rounded-lg"
+                />
+                <input
+                  type="date"
+                  value={newPaymentDate}
+                  onChange={(e) => setNewPaymentDate(e.target.value)}
+                  className="p-2 border border-gray-300 rounded-lg"
+                />
+                <div className="flex items-center">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="p-2"
+                  />
+                  {ocrLoading && (
+                    <span className="ml-2 text-gray-600">
+                      Analyse en cours...
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleAddPayment}
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg"
+                >
+                  Ajouter le paiement
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer Sticky pour la sélection de Mois et Année */}
       <footer className="fixed bottom-0 left-0 w-full bg-gray-700 text-white py-4 flex justify-between items-center px-4">
-        <div className="flex space-x-2">
+        <div className="flex space-x-2 overflow-x-auto">
           {months.map((month, index) => (
             <button
               key={index}
               onClick={() => handleMonthChange(index)}
-              className={`px-2 py-1 rounded-lg ${
+              className={`px-2 py-1 rounded-lg whitespace-nowrap ${
                 selectedMonth === index ? "bg-blue-500" : "bg-gray-600"
               }`}
             >
