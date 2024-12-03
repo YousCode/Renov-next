@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSave, faEdit, faFile } from "@fortawesome/free-solid-svg-icons";
+import { faSave, faFile } from "@fortawesome/free-solid-svg-icons";
 
 const EditSale = () => {
   const { id } = useParams();
@@ -13,6 +13,7 @@ const EditSale = () => {
   const [sale, setSale] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showCustomTVA, setShowCustomTVA] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -42,7 +43,28 @@ const EditSale = () => {
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
-    setSale((prev) => ({ ...prev, [name]: value }));
+
+    setSale((prev) => {
+      const updatedSale = { ...prev, [name]: value };
+
+      // Calculer MONTANT TTC lorsque MONTANT HT ou TAUX TVA change
+      if (
+        (name === "MONTANT HT" || name === "TAUX TVA") &&
+        updatedSale["MONTANT HT"] &&
+        updatedSale["TAUX TVA"]
+      ) {
+        const montantHT = parseFloat(updatedSale["MONTANT HT"]) || 0;
+        let tauxTVA = parseFloat(updatedSale["TAUX TVA"]) || 0;
+        // Si le taux TVA est supérieur à 1, on considère qu'il est exprimé en pourcentage
+        if (tauxTVA > 1) {
+          tauxTVA = tauxTVA / 100;
+        }
+        const montantTTC = montantHT + montantHT * tauxTVA;
+        updatedSale["MONTANT TTC"] = montantTTC.toFixed(2); // Arrondir à deux décimales
+      }
+
+      return updatedSale;
+    });
   };
 
   const handleSave = async (event) => {
@@ -68,16 +90,22 @@ const EditSale = () => {
     }
   };
 
-  const handleEditSale = (saleId, saleDate) => {
-    router.push(`/sales/edit/${saleId}?date=${saleDate}`);
-  };
-
   const handleFileAction = (saleId) => {
     router.push(`/file/details/${saleId}`);
   };
 
-  if (loading) return <p className="text-center text-gray-700">Loading...</p>;
-  if (error) return <p className="text-center text-red-500">{error}</p>;
+  if (loading)
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-center text-gray-700 text-xl animate-pulse">Chargement...</p>
+      </div>
+    );
+  if (error)
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-center text-red-500 text-xl">{error}</p>
+      </div>
+    );
   if (!sale) return null;
 
   const defaultSale = {
@@ -93,32 +121,142 @@ const EditSale = () => {
     TELEPHONE: "",
     VENDEUR: "",
     DESIGNATION: "",
-    "TAUX TVA": "",
-    "MONTANT TTC ": "",
+    "TAUX TVA": "5.5", // Valeur par défaut
     "MONTANT HT": "",
+    "MONTANT TTC": "",
     "MONTANT ANNULE": "",
+    "ETAT": "",
+    // Ajoutez d'autres champs si nécessaire
   };
 
   const currentSale = { ...defaultSale, ...sale };
 
   return (
-    <div>
+    <div className="min-h-screen bg-gradient-to-br from-green-200 to-grey-600">
       <Navbar />
-      <div style={{ backgroundColor: "#005C47" }} className="max-w-4xl mx-auto p-6 bg-gray-100 rounded-lg shadow-md">
-        <h2 className="text-2xl text-[#B0FFE9] font-bold mb-6 text-center">Compléter la vente</h2>
-        <form onSubmit={handleSave}>
-          {Object.entries(currentSale).map(
-            ([key, value]) =>
-              key !== "_id" &&
-              key !== "createdAt" &&
-              key !== "updatedAt" &&
-              key !== "__v" && (
+      <div className="max-w-6xl mx-auto py-8 px-4">
+        <h2 className="text-3xl text-white font-bold mb-6 text-center animate-fade-in">
+          Compléter la vente
+        </h2>
+        <form
+          onSubmit={handleSave}
+          className="bg-white bg-opacity-80 backdrop-filter backdrop-blur-lg rounded-lg shadow-2xl p-6 animate-slide-up"
+        >
+          <div className="grid grid-cols-2 gap-6">
+            {Object.entries(currentSale).map(([key, value]) => {
+              if (
+                key === "_id" ||
+                key === "createdAt" ||
+                key === "updatedAt" ||
+                key === "__v"
+              ) {
+                return null;
+              }
+
+              // Champ pour "ETAT"
+              if (key === "ETAT") {
+                return (
+                  <div className="mb-4 col-span-2" key={key}>
+                    <label className="block text-gray-800 font-semibold mb-2">
+                      {key.replace(/_/g, " ")}
+                    </label>
+                    <select
+                      className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
+                      name="ETAT"
+                      value={value || ""}
+                      onChange={handleInputChange}
+                    >
+                      <option value="">Sélectionner un état</option>
+                      <option value="En attente">En attente</option>
+                      <option value="Confirmé">Confirmé</option>
+                      <option value="Annulé">Annulé</option>
+                    </select>
+                  </div>
+                );
+              }
+
+              // Champ pour "TAUX TVA" avec liste déroulante et option personnalisée
+              if (key === "TAUX TVA") {
+                return (
+                  <div className="mb-4" key={key}>
+                    <label className="block text-gray-800 font-semibold mb-2">
+                      {key.replace(/_/g, " ")}
+                    </label>
+                    <select
+                      className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
+                      name="TAUX TVA"
+                      value={value || ""}
+                      onChange={(e) => {
+                        handleInputChange(e);
+                        setShowCustomTVA(e.target.value === "Autre");
+                      }}
+                    >
+                      <option value="5.5">5.5%</option>
+                      <option value="10">10%</option>
+                      <option value="Autre">Autre</option>
+                    </select>
+                    {showCustomTVA && (
+                      <input
+                        className="border border-gray-300 p-2 rounded-md w-full mt-2 focus:ring-2 focus:ring-blue-500 transition duration-300 animate-fade-in"
+                        type="number"
+                        name="TAUX TVA"
+                        value={value || ""}
+                        onChange={handleInputChange}
+                        placeholder="Entrez le taux de TVA"
+                        step="0.01"
+                        min="0"
+                      />
+                    )}
+                  </div>
+                );
+              }
+
+              // Champ pour "MONTANT HT"
+              if (key === "MONTANT HT") {
+                return (
+                  <div className="mb-4" key={key}>
+                    <label className="block text-gray-800 font-semibold mb-2">
+                      {key.replace(/_/g, " ")}
+                    </label>
+                    <input
+                      className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
+                      type="number"
+                      name={key}
+                      value={value || ""}
+                      onChange={handleInputChange}
+                      step="0.01"
+                      min="0"
+                    />
+                  </div>
+                );
+              }
+
+              // Champ "MONTANT TTC" en lecture seule
+              if (key === "MONTANT TTC") {
+                return (
+                  <div className="mb-4" key={key}>
+                    <label className="block text-gray-800 font-semibold mb-2">
+                      {key.replace(/_/g, " ")}
+                    </label>
+                    <input
+                      className="border border-gray-300 p-2 rounded-md w-full bg-gray-100 cursor-not-allowed"
+                      type="number"
+                      name={key}
+                      value={value || ""}
+                      readOnly
+                    />
+                  </div>
+                );
+              }
+
+              // Autres champs
+              return (
                 <div className="mb-4" key={key}>
-                  <label className="block text-[#B0FFE9] capitalize">
+                  <label className="block text-gray-800 font-semibold mb-2">
                     {key.replace(/_/g, " ")}
                   </label>
                   <input
-                    className="border p-2 rounded-md w-full text-black"
+                    className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
                     type={key === "DATE DE VENTE" ? "date" : "text"}
                     name={key}
                     value={value || ""}
@@ -126,31 +264,19 @@ const EditSale = () => {
                     required={["NOM DU CLIENT", "DATE DE VENTE"].includes(key)}
                   />
                 </div>
-              )
-          )}
-          <div className="mb-4">
-            <label className="block text-[#B0FFE9]">Status</label>
-            <select
-              className="border p-2 rounded-md w-full"
-              name="ETAT"
-              value={currentSale["ETAT"]}
-              onChange={handleInputChange}
-            >
-              <option value="En attente">En attente</option>
-              <option value="Confirmé">Confirmé</option>
-              <option value="Annulé">Annulé</option>
-            </select>
+              );
+            })}
           </div>
-          <div className="flex justify-center space-x-4">
+          <div className="flex justify-center space-x-4 mt-6">
             <button
-              className="bg-blue-500 text-white py-2 px-4 rounded-md mt-4 hover:bg-blue-600 transition duration-300"
+              className="bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transform transition duration-300 hover:scale-105"
               type="submit"
             >
-              <FontAwesomeIcon icon={faSave} /> Validé
+              <FontAwesomeIcon icon={faSave} /> Valider
             </button>
             <button
               onClick={() => handleFileAction(id)}
-              className="bg-gray-500 text-white py-2 px-4 rounded-md mt-4 hover:bg-gray-600 transition duration-300"
+              className="bg-gray-500 text-white py-2 px-6 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 transform transition duration-300 hover:scale-105"
               type="button"
             >
               <FontAwesomeIcon icon={faFile} /> Fichier
