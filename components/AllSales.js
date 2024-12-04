@@ -9,7 +9,10 @@ import {
   faFile,
   faMoneyBillWave,
   faTimes,
+  faTrash,
 } from "@fortawesome/free-solid-svg-icons";
+import Confetti from "react-confetti";
+import useWindowSize from "react-use/lib/useWindowSize";
 
 const normalizeString = (str) => {
   return str
@@ -20,7 +23,7 @@ const normalizeString = (str) => {
     : "";
 };
 
-const ITEMS_PER_PAGE = 200;
+const ITEMS_PER_PAGE = 500; // Nombre d'éléments par page
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "Date invalide";
@@ -90,19 +93,26 @@ const isExcludedState = (etat) => {
 
 const AllSales = () => {
   const [sales, setSales] = useState([]);
-  const [filteredSales, setFilteredSales] = useState([]);
+  const [displayedSales, setDisplayedSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortOrder, setSortOrder] = useState("asc");
+  const [sortField, setSortField] = useState("DATE DE VENTE"); // Champ de tri
+  const [sortOrder, setSortOrder] = useState("asc"); // Ordre de tri
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSale, setSelectedSale] = useState(null);
   const [payments, setPayments] = useState([]);
   const [newPaymentAmount, setNewPaymentAmount] = useState("");
   const [newPaymentDate, setNewPaymentDate] = useState("");
+  const [newPaymentComment, setNewPaymentComment] = useState("");
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [showAllSales, setShowAllSales] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1); // Page actuelle
+  const [totalPages, setTotalPages] = useState(1); // Nombre total de pages
+
   const router = useRouter();
 
   const tableRef = useRef(null);
@@ -132,19 +142,72 @@ const AllSales = () => {
   };
 
   const filterSalesByDate = (salesData) => {
-    const filtered = salesData.filter((sale) => {
+    let filtered = salesData.filter((sale) => {
       const saleDate = new Date(sale["DATE DE VENTE"]);
       const etat = normalizeString(sale.ETAT || "");
 
       // Inclure les ventes même si l'état est vide
       return (
-        saleDate.getMonth() === selectedMonth &&
-        saleDate.getFullYear() === selectedYear &&
-        !isExcludedState(etat)
+        (!showAllSales
+          ? saleDate.getMonth() === selectedMonth &&
+            saleDate.getFullYear() === selectedYear
+          : true) && !isExcludedState(etat)
       );
     });
-    setFilteredSales(filtered);
+
+    // Filtrer par recherche
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (sale) =>
+          normalizeString(sale["NOM DU CLIENT"]).includes(searchTerm) ||
+          normalizeString(sale["TELEPHONE"]).includes(searchTerm) ||
+          normalizeString(sale["ADRESSE DU CLIENT"]).includes(searchTerm)
+      );
+    }
+
+    // Trier les ventes
+    filtered.sort((a, b) => {
+      let valueA = a[sortField];
+      let valueB = b[sortField];
+
+      // Gérer les dates
+      if (sortField === "DATE DE VENTE") {
+        valueA = new Date(valueA);
+        valueB = new Date(valueB);
+      } else if (sortField === "MONTANT HT" || sortField === "MONTANT TTC") {
+        valueA = parseFloat(valueA);
+        valueB = parseFloat(valueB);
+      } else {
+        valueA = normalizeString(valueA);
+        valueB = normalizeString(valueB);
+      }
+
+      if (valueA < valueB) return sortOrder === "asc" ? -1 : 1;
+      if (valueA > valueB) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    // Pagination
+    setTotalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedSales = filtered.slice(startIndex, endIndex);
+
+    setDisplayedSales(paginatedSales);
   };
+
+  useEffect(() => {
+    filterSalesByDate(sales);
+  }, [
+    showAllSales,
+    selectedMonth,
+    selectedYear,
+    sortField,
+    sortOrder,
+    sales,
+    currentPage,
+    searchTerm,
+  ]);
 
   const handleMonthChange = (month) => {
     setSelectedMonth(month);
@@ -157,26 +220,12 @@ const AllSales = () => {
   const handleSearchChange = (e) => {
     const term = normalizeString(e.target.value);
     setSearchTerm(term);
-
-    const filtered = sales.filter(
-      (sale) =>
-        normalizeString(sale["NOM DU CLIENT"]).includes(term) ||
-        normalizeString(sale["TELEPHONE"]).includes(term) ||
-        normalizeString(sale["ADRESSE DU CLIENT"]).includes(term)
-    );
-    setFilteredSales(filtered);
+    setCurrentPage(1); // Réinitialiser à la première page lors de la recherche
   };
 
-  const handleSortDate = () => {
-    const newSortOrder = sortOrder === "asc" ? "desc" : "asc";
-    setSortOrder(newSortOrder);
-    setFilteredSales((prevSales) =>
-      [...prevSales].sort((a, b) => {
-        const dateA = new Date(a["DATE DE VENTE"]);
-        const dateB = new Date(b["DATE DE VENTE"]);
-        return newSortOrder === "asc" ? dateA - dateB : dateB - dateA;
-      })
-    );
+  const handleToggleShowAllSales = () => {
+    setShowAllSales((prev) => !prev);
+    setCurrentPage(1); // Réinitialiser à la première page
   };
 
   // Fonction pour gérer le double-clic sur une ligne de vente
@@ -197,6 +246,7 @@ const AllSales = () => {
     const newPayment = {
       montant: parseFloat(newPaymentAmount),
       date: newPaymentDate,
+      comment: newPaymentComment, // Ajouter le commentaire
       id: Date.now(), // ID temporaire pour le mapping
     };
 
@@ -213,6 +263,7 @@ const AllSales = () => {
 
     setNewPaymentAmount("");
     setNewPaymentDate("");
+    setNewPaymentComment("");
   };
 
   // Fonction pour gérer le téléchargement d'une image et l'extraction du montant via OCR
@@ -266,6 +317,54 @@ const AllSales = () => {
     return totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
   };
 
+  // Calcul du total HT des ventes affichées (en excluant les ventes annulées)
+  const calculateTotalHT = () => {
+    return displayedSales.reduce((sum, sale) => {
+      const etat = normalizeString(sale.ETAT || "");
+      if (etat === "annule") {
+        return sum;
+      }
+      const montantHT = parseFloat(sale["MONTANT HT"]);
+      return sum + (isNaN(montantHT) ? 0 : montantHT);
+    }, 0);
+  };
+
+  // Gestion de l'animation des confettis
+  const handleTotalMouseEnter = () => {
+    setShowConfetti(true);
+  };
+
+  const handleTotalMouseLeave = () => {
+    setShowConfetti(false);
+  };
+
+  // Obtenir la taille de la fenêtre pour Confetti
+  const { width, height } = useWindowSize();
+
+  // Fonction pour supprimer une vente avec confirmation
+  const handleDeleteSale = (sale) => {
+    if (confirm("Êtes-vous sûr de vouloir supprimer cette vente ?")) {
+      // Envoyer la requête DELETE
+      fetch(`/api/ventes/${sale._id}`, {
+        method: "DELETE",
+        credentials: "include",
+      })
+        .then((response) => {
+          if (response.ok) {
+            // Supprimer la vente de l'état
+            setSales((prevSales) => prevSales.filter((s) => s._id !== sale._id));
+            alert("Vente supprimée avec succès.");
+          } else {
+            alert("Erreur lors de la suppression de la vente.");
+          }
+        })
+        .catch((error) => {
+          console.error("Erreur lors de la suppression de la vente :", error);
+          alert("Erreur lors de la suppression de la vente.");
+        });
+    }
+  };
+
   if (loading)
     return <p className="text-center text-gray-700">Chargement...</p>;
   if (error) return <p className="text-center text-red-500">{error}</p>;
@@ -294,39 +393,68 @@ const AllSales = () => {
         >
           Retour
         </button>
-        <div className="flex items-center justify-center w-full">
+        <div className="flex flex-col md:flex-row items-center justify-center w-full mb-2 space-y-2 md:space-y-0">
           <input
             type="text"
             value={searchTerm}
             onChange={handleSearchChange}
             placeholder="Rechercher par nom, téléphone, adresse"
-            className="w-1/2 p-2 border border-gray-300 rounded-lg"
+            className="w-full md:w-1/2 p-2 border border-gray-300 rounded-lg"
           />
+          <button
+            onClick={handleToggleShowAllSales}
+            className="mt-2 md:mt-0 md:ml-4 px-4 py-2 bg-blue-500 text-white rounded-lg"
+          >
+            {showAllSales
+              ? "Afficher les ventes du mois"
+              : "Afficher toutes les ventes"}
+          </button>
+        </div>
+        {/* Filtres de tri */}
+        <div className="flex items-center space-x-2 mb-2">
+          <label className="text-white">Trier par :</label>
+          <select
+            value={sortField}
+            onChange={(e) => setSortField(e.target.value)}
+            className="p-1 border border-gray-300 rounded-lg"
+          >
+            <option value="DATE DE VENTE">Date de Vente</option>
+            <option value="NOM DU CLIENT">Nom du Client</option>
+            <option value="MONTANT HT">Montant HT</option>
+            <option value="MONTANT TTC">Montant TTC</option>
+            {/* Ajoutez d'autres options si nécessaire */}
+          </select>
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value)}
+            className="p-1 border border-gray-300 rounded-lg"
+          >
+            <option value="asc">Ascendant</option>
+            <option value="desc">Descendant</option>
+          </select>
         </div>
       </div>
 
       <div className="w-full overflow-x-auto mb-16">
-        <table ref={tableRef} className="min-w-full bg-white text-gray-800">
+        <table
+          ref={tableRef}
+          className="min-w-full bg-white text-gray-800 text-sm md:text-base"
+        >
           <thead className="bg-gray-700 text-white">
             <tr>
-              <th
-                className="relative w-1/12 px-4 py-2 cursor-pointer"
-                onClick={handleSortDate}
-              >
-                Date de Vente {sortOrder === "asc" ? "↑" : "↓"}
-              </th>
-              <th className="relative w-1/12 px-4 py-2">Nom du Client</th>
-              <th className="relative w-1/12 px-4 py-2">Téléphone</th>
-              <th className="relative w-1/12 px-4 py-2">Adresse</th>
-              <th className="relative w-1/12 px-4 py-2">Ville</th>
-              <th className="relative w-1/12 px-4 py-2">Montant TTC</th>
-              <th className="relative w-1/12 px-4 py-2">Montant HT</th>
-              <th className="relative w-1/12 px-4 py-2">État</th>
-              <th className="relative w-1/12 px-4 py-2">Actions</th>
+              <th className="px-2 py-2">Date</th>
+              <th className="px-2 py-2">Nom</th>
+              <th className="px-2 py-2">Téléphone</th>
+              <th className="px-2 py-2">Adresse</th>
+              <th className="px-2 py-2">Ville</th>
+              <th className="px-2 py-2">Montant TTC</th>
+              <th className="px-2 py-2">Montant HT</th>
+              <th className="px-2 py-2">État</th>
+              <th className="px-2 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filteredSales.map((sale) => (
+            {displayedSales.map((sale) => (
               <tr
                 key={sale._id}
                 className={`${
@@ -335,34 +463,34 @@ const AllSales = () => {
                     : !sale["ADRESSE DU CLIENT"] || !sale.VILLE
                     ? "animate-blink-yellow"
                     : "bg-white"
-                }`}
+                } hover:bg-gray-100`}
                 onDoubleClick={() => handleRowDoubleClick(sale)}
               >
-                <td className="border px-4 py-2">
+                <td className="border px-2 py-2">
                   {formatDate(sale["DATE DE VENTE"])}
                 </td>
-                <td className="border px-4 py-2">{sale["NOM DU CLIENT"]}</td>
-                <td className="border px-4 py-2">{sale.TELEPHONE}</td>
-                <td className="border px-4 py-2">
+                <td className="border px-2 py-2">{sale["NOM DU CLIENT"]}</td>
+                <td className="border px-2 py-2">{sale.TELEPHONE}</td>
+                <td className="border px-2 py-2">
                   {sale["ADRESSE DU CLIENT"] || "Adresse manquante"}
                 </td>
-                <td className="border px-4 py-2">
+                <td className="border px-2 py-2">
                   {sale.VILLE || "Ville manquante"}
                 </td>
-                <td className="border px-4 py-2">
+                <td className="border px-2 py-2">
                   {sale["MONTANT TTC"]
                     ? formatNumber(sale["MONTANT TTC"])
                     : "N/A"}
                 </td>
-                <td className="border px-4 py-2">
+                <td className="border px-2 py-2">
                   {sale["MONTANT HT"]
                     ? formatNumber(sale["MONTANT HT"])
                     : "N/A"}
                 </td>
-                <td className="border px-4 py-2">
+                <td className="border px-2 py-2">
                   {sale.ETAT || "" /* Ne pas afficher "État inconnu" */}
                 </td>
-                <td className="border px-4 py-2 flex justify-center space-x-2">
+                <td className="border px-2 py-2 flex justify-center space-x-1">
                   <button
                     onClick={() => router.push(`/sales/edit/${sale._id}`)}
                     className="px-2 py-1 bg-blue-500 text-white rounded-lg"
@@ -371,22 +499,68 @@ const AllSales = () => {
                   </button>
                   <button
                     onClick={() => router.push(`/file/details/${sale._id}`)}
-                    className="px-2 py-1 bg-green-500 text-white rounded-lg ml-2"
+                    className="px-2 py-1 bg-green-500 text-white rounded-lg"
                   >
                     <FontAwesomeIcon icon={faFile} />
                   </button>
                   <button
                     onClick={() => handleRowDoubleClick(sale)}
-                    className="px-2 py-1 bg-yellow-500 text-white rounded-lg ml-2"
+                    className="px-2 py-1 bg-yellow-500 text-white rounded-lg"
                   >
                     <FontAwesomeIcon icon={faMoneyBillWave} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteSale(sale)}
+                    className="px-2 py-1 bg-red-500 text-white rounded-lg"
+                  >
+                    <FontAwesomeIcon icon={faTrash} />
                   </button>
                 </td>
               </tr>
             ))}
+            {/* Ligne pour le total HT */}
+            <tr
+              className="bg-gray-200 font-bold cursor-pointer"
+              onMouseEnter={handleTotalMouseEnter}
+              onMouseLeave={handleTotalMouseLeave}
+            >
+              <td colSpan="5" className="border px-4 py-2 text-right">
+                Total HT :
+              </td>
+              <td className="border px-4 py-2">
+                {formatNumber(calculateTotalHT())}
+              </td>
+              <td colSpan="3" className="border px-4 py-2"></td>
+            </tr>
           </tbody>
         </table>
       </div>
+
+      {/* Contrôles de pagination */}
+      <div className="flex justify-center items-center space-x-2 mt-4">
+        <button
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+          className="px-2 py-1 bg-gray-500 text-white rounded-lg disabled:opacity-50"
+        >
+          Précédent
+        </button>
+        <span className="text-white">
+          Page {currentPage} sur {totalPages}
+        </span>
+        <button
+          onClick={() =>
+            setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+          }
+          disabled={currentPage === totalPages}
+          className="px-2 py-1 bg-gray-500 text-white rounded-lg disabled:opacity-50"
+        >
+          Suivant
+        </button>
+      </div>
+
+      {/* Animation de confettis */}
+      {showConfetti && <Confetti width={width} height={height} />}
 
       {/* Modal pour gérer les paiements */}
       {isModalOpen && selectedSale && (
@@ -434,8 +608,13 @@ const AllSales = () => {
               <h3 className="font-bold mb-2">Historique des paiements :</h3>
               <ul>
                 {payments.map((payment) => (
-                  <li key={payment.id}>
+                  <li key={payment.id} className="mb-2">
                     {formatDate(payment.date)} - {formatNumber(payment.montant)}
+                    {payment.comment && (
+                      <p className="text-sm text-gray-600">
+                        Commentaire : {payment.comment}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -458,6 +637,12 @@ const AllSales = () => {
                   onChange={(e) => setNewPaymentDate(e.target.value)}
                   className="p-2 border border-gray-300 rounded-lg"
                 />
+                <textarea
+                  value={newPaymentComment}
+                  onChange={(e) => setNewPaymentComment(e.target.value)}
+                  placeholder="Commentaire"
+                  className="p-2 border border-gray-300 rounded-lg"
+                ></textarea>
                 <div className="flex items-center">
                   <input
                     type="file"
@@ -484,41 +669,43 @@ const AllSales = () => {
       )}
 
       {/* Footer Sticky pour la sélection de Mois et Année */}
-      <footer className="fixed bottom-0 left-0 w-full bg-gray-700 text-white py-4 flex justify-between items-center px-4">
-        <div className="flex space-x-2 overflow-x-auto">
-          {months.map((month, index) => (
-            <button
-              key={index}
-              onClick={() => handleMonthChange(index)}
-              className={`px-2 py-1 rounded-lg whitespace-nowrap ${
-                selectedMonth === index ? "bg-blue-500" : "bg-gray-600"
-              }`}
+      {!showAllSales && (
+        <footer className="fixed bottom-0 left-0 w-full bg-gray-700 text-white py-4 flex flex-col md:flex-row justify-between items-center px-4">
+          <div className="flex space-x-2 overflow-x-auto mb-2 md:mb-0">
+            {months.map((month, index) => (
+              <button
+                key={index}
+                onClick={() => handleMonthChange(index)}
+                className={`px-2 py-1 rounded-lg whitespace-nowrap ${
+                  selectedMonth === index ? "bg-blue-500" : "bg-gray-600"
+                }`}
+              >
+                {month}
+              </button>
+            ))}
+          </div>
+          <div>
+            <label htmlFor="year" className="mr-2">
+              Année :
+            </label>
+            <select
+              id="year"
+              value={selectedYear}
+              onChange={handleYearChange}
+              className="p-1 bg-gray-600 rounded-lg text-white"
             >
-              {month}
-            </button>
-          ))}
-        </div>
-        <div>
-          <label htmlFor="year" className="mr-2">
-            Année :
-          </label>
-          <select
-            id="year"
-            value={selectedYear}
-            onChange={handleYearChange}
-            className="p-1 bg-gray-600 rounded-lg text-white"
-          >
-            {Array.from({ length: 10 }, (_, i) => {
-              const year = new Date().getFullYear() - i;
-              return (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-      </footer>
+              {Array.from({ length: 10 }, (_, i) => {
+                const year = new Date().getFullYear() - i;
+                return (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        </footer>
+      )}
 
       <style jsx>{`
         @keyframes blink {

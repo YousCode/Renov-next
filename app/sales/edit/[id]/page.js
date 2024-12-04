@@ -14,6 +14,7 @@ const EditSale = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showCustomTVA, setShowCustomTVA] = useState(false);
+  const [notification, setNotification] = useState(null); // Pour les messages de notification
   const router = useRouter();
 
   useEffect(() => {
@@ -69,6 +70,19 @@ const EditSale = () => {
 
   const handleSave = async (event) => {
     event.preventDefault();
+
+    // Champs obligatoires
+    const requiredFields = ["NOM DU CLIENT", "prenom", "ADRESSE DU CLIENT"];
+    const missingFields = requiredFields.filter((field) => !sale[field]);
+
+    if (missingFields.length > 0) {
+      setNotification({
+        type: "error",
+        message: `Les champs suivants sont obligatoires : ${missingFields.join(", ")}`,
+      });
+      return;
+    }
+
     try {
       const response = await fetch(`/api/ventes/${id}`, {
         method: "PUT",
@@ -80,13 +94,24 @@ const EditSale = () => {
       });
 
       if (response.ok) {
-        router.back(); // Retourne à la page précédente
+        setNotification({
+          type: "success",
+          message: "Les données ont été mises à jour avec succès.",
+        });
+        // Optionnel : redirection après quelques secondes
+        setTimeout(() => {
+          router.back(); // Retourne à la page précédente
+        }, 2000);
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || `Error: ${response.status}`);
       }
     } catch (error) {
       console.error("Error saving sale:", error.message);
+      setNotification({
+        type: "error",
+        message: `Erreur lors de la sauvegarde : ${error.message}`,
+      });
     }
   };
 
@@ -138,6 +163,18 @@ const EditSale = () => {
         <h2 className="text-3xl text-white font-bold mb-6 text-center animate-fade-in">
           Compléter la vente
         </h2>
+        {/* Affichage des notifications */}
+        {notification && (
+          <div
+            className={`p-4 rounded-md mb-6 ${
+              notification.type === "success"
+                ? "bg-green-500 text-white"
+                : "bg-red-500 text-white"
+            }`}
+          >
+            {notification.message}
+          </div>
+        )}
         <form
           onSubmit={handleSave}
           className="bg-white bg-opacity-80 backdrop-filter backdrop-blur-lg rounded-lg shadow-2xl p-6 animate-slide-up"
@@ -261,7 +298,7 @@ const EditSale = () => {
                     name={key}
                     value={value || ""}
                     onChange={handleInputChange}
-                    required={["NOM DU CLIENT", "DATE DE VENTE"].includes(key)}
+                    required={["NOM DU CLIENT"].includes(key)} // "DATE DE VENTE" n'est plus obligatoire
                   />
                 </div>
               );
