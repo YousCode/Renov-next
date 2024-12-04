@@ -91,6 +91,45 @@ const isExcludedState = (etat) => {
   return dvRegex.test(etat) || numberRegex.test(etat);
 };
 
+// Fonction pour traiter les montants HT et TTC
+const processSalesData = (salesData) => {
+  return salesData.map((sale) => {
+    let montantHT = parseFloat(sale["MONTANT HT"]);
+    let montantTTC = parseFloat(sale["MONTANT TTC"]);
+    let tauxTVA = parseFloat(sale["TAUX TVA"]) || 5.5; // Valeur par défaut
+
+    // Si le taux de TVA est supérieur à 1, le considérer comme un pourcentage
+    if (tauxTVA > 1) {
+      tauxTVA = tauxTVA / 100;
+    }
+
+    // Calculer Montant TTC si manquant
+    if (isNaN(montantTTC) && !isNaN(montantHT)) {
+      montantTTC = montantHT * (1 + tauxTVA);
+      sale["MONTANT TTC"] = montantTTC.toFixed(2);
+    }
+
+    // Calculer Montant HT si manquant
+    if (isNaN(montantHT) && !isNaN(montantTTC)) {
+      montantHT = montantTTC / (1 + tauxTVA);
+      sale["MONTANT HT"] = montantHT.toFixed(2);
+    }
+
+    // Si les deux sont manquants, les initialiser à 0
+    if (isNaN(montantHT) && isNaN(montantTTC)) {
+      sale["MONTANT HT"] = "0.00";
+      sale["MONTANT TTC"] = "0.00";
+    }
+
+    // Assurer que le taux de TVA est toujours présent
+    if (!sale["TAUX TVA"]) {
+      sale["TAUX TVA"] = "5.5";
+    }
+
+    return sale;
+  });
+};
+
 const AllSales = () => {
   const [sales, setSales] = useState([]);
   const [displayedSales, setDisplayedSales] = useState([]);
@@ -119,6 +158,7 @@ const AllSales = () => {
 
   useEffect(() => {
     fetchSales();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth, selectedYear]);
 
   const fetchSales = async () => {
@@ -131,8 +171,9 @@ const AllSales = () => {
         );
       }
       const data = await response.json();
-      setSales(data.data);
-      filterSalesByDate(data.data);
+      const processedSales = processSalesData(data.data);
+      setSales(processedSales);
+      filterSalesByDate(processedSales);
     } catch (error) {
       console.error("Erreur lors de la récupération des ventes :", error);
       setError(`Erreur : ${error.message}`);
@@ -198,6 +239,7 @@ const AllSales = () => {
 
   useEffect(() => {
     filterSalesByDate(sales);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     showAllSales,
     selectedMonth,
@@ -245,8 +287,14 @@ const AllSales = () => {
       return;
     }
 
+    const montant = parseFloat(newPaymentAmount);
+    if (isNaN(montant) || montant <= 0) {
+      alert("Veuillez entrer un montant valide.");
+      return;
+    }
+
     const newPayment = {
-      montant: parseFloat(newPaymentAmount),
+      montant: montant,
       date: newPaymentDate,
       comment: newPaymentComment, // Ajouter le commentaire
       id: Date.now(), // ID temporaire pour le mapping
@@ -477,14 +525,10 @@ const AllSales = () => {
                   {sale.VILLE || "Ville manquante"}
                 </td>
                 <td className="border px-2 py-1">
-                  {sale["MONTANT TTC"]
-                    ? formatNumber(sale["MONTANT TTC"])
-                    : "N/A"}
+                  {formatNumber(sale["MONTANT TTC"])}
                 </td>
                 <td className="border px-2 py-1">
-                  {sale["MONTANT HT"]
-                    ? formatNumber(sale["MONTANT HT"])
-                    : "N/A"}
+                  {formatNumber(sale["MONTANT HT"])}
                 </td>
                 <td className="border px-2 py-1">
                   {sale.ETAT || "" /* Ne pas afficher "État inconnu" */}
