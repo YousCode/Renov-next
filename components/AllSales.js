@@ -211,10 +211,12 @@ const AllSales = () => {
 
   const handleMonthChange = (month) => {
     setSelectedMonth(month);
+    setCurrentPage(1); // Réinitialiser à la première page lors du changement de mois
   };
 
   const handleYearChange = (event) => {
     setSelectedYear(Number(event.target.value));
+    setCurrentPage(1); // Réinitialiser à la première page lors du changement d'année
   };
 
   const handleSearchChange = (e) => {
@@ -329,6 +331,18 @@ const AllSales = () => {
     }, 0);
   };
 
+  // Calcul du total TTC des ventes affichées (en excluant les ventes annulées)
+  const calculateTotalTTC = () => {
+    return displayedSales.reduce((sum, sale) => {
+      const etat = normalizeString(sale.ETAT || "");
+      if (etat === "annule") {
+        return sum;
+      }
+      const montantTTC = parseFloat(sale["MONTANT TTC"]);
+      return sum + (isNaN(montantTTC) ? 0 : montantTTC);
+    }, 0);
+  };
+
   // Gestion de l'animation des confettis
   const handleTotalMouseEnter = () => {
     setShowConfetti(true);
@@ -341,27 +355,12 @@ const AllSales = () => {
   // Obtenir la taille de la fenêtre pour Confetti
   const { width, height } = useWindowSize();
 
-  // Fonction pour supprimer une vente avec confirmation
+  // Fonction pour supprimer une vente de l'affichage avec confirmation
   const handleDeleteSale = (sale) => {
-    if (confirm("Êtes-vous sûr de vouloir supprimer cette vente ?")) {
-      // Envoyer la requête DELETE
-      fetch(`/api/ventes/${sale._id}`, {
-        method: "DELETE",
-        credentials: "include",
-      })
-        .then((response) => {
-          if (response.ok) {
-            // Supprimer la vente de l'état
-            setSales((prevSales) => prevSales.filter((s) => s._id !== sale._id));
-            alert("Vente supprimée avec succès.");
-          } else {
-            alert("Erreur lors de la suppression de la vente.");
-          }
-        })
-        .catch((error) => {
-          console.error("Erreur lors de la suppression de la vente :", error);
-          alert("Erreur lors de la suppression de la vente.");
-        });
+    if (confirm("Êtes-vous sûr de vouloir retirer cette vente de l'affichage ?")) {
+      // Retirer la vente de l'état `sales`
+      setSales((prevSales) => prevSales.filter((s) => s._id !== sale._id));
+      alert("Vente retirée de l'affichage.");
     }
   };
 
@@ -385,7 +384,7 @@ const AllSales = () => {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col items-center bg-gray-800 p-4">
+    <div className="min-h-screen flex flex-col items-center bg-gray-800 p-4 font-arial text-sm">
       <div className="flex flex-col items-center w-full mb-4">
         <button
           onClick={() => router.back()}
@@ -438,19 +437,19 @@ const AllSales = () => {
       <div className="w-full overflow-x-auto mb-16">
         <table
           ref={tableRef}
-          className="min-w-full bg-white text-gray-800 text-sm md:text-base"
+          className="min-w-full bg-white text-gray-800 text-sm"
         >
           <thead className="bg-gray-700 text-white">
             <tr>
-              <th className="px-2 py-2">Date</th>
-              <th className="px-2 py-2">Nom</th>
-              <th className="px-2 py-2">Téléphone</th>
-              <th className="px-2 py-2">Adresse</th>
-              <th className="px-2 py-2">Ville</th>
-              <th className="px-2 py-2">Montant TTC</th>
-              <th className="px-2 py-2">Montant HT</th>
-              <th className="px-2 py-2">État</th>
-              <th className="px-2 py-2">Actions</th>
+              <th className="px-2 py-1">Date</th>
+              <th className="px-2 py-1">Nom</th>
+              <th className="px-2 py-1">Téléphone</th>
+              <th className="px-2 py-1">Adresse</th>
+              <th className="px-2 py-1">Ville</th>
+              <th className="px-2 py-1">Montant TTC</th>
+              <th className="px-2 py-1">Montant HT</th>
+              <th className="px-2 py-1">État</th>
+              <th className="px-2 py-1">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -466,31 +465,31 @@ const AllSales = () => {
                 } hover:bg-gray-100`}
                 onDoubleClick={() => handleRowDoubleClick(sale)}
               >
-                <td className="border px-2 py-2">
+                <td className="border px-2 py-1">
                   {formatDate(sale["DATE DE VENTE"])}
                 </td>
-                <td className="border px-2 py-2">{sale["NOM DU CLIENT"]}</td>
-                <td className="border px-2 py-2">{sale.TELEPHONE}</td>
-                <td className="border px-2 py-2">
+                <td className="border px-2 py-1">{sale["NOM DU CLIENT"]}</td>
+                <td className="border px-2 py-1">{sale.TELEPHONE}</td>
+                <td className="border px-2 py-1">
                   {sale["ADRESSE DU CLIENT"] || "Adresse manquante"}
                 </td>
-                <td className="border px-2 py-2">
+                <td className="border px-2 py-1">
                   {sale.VILLE || "Ville manquante"}
                 </td>
-                <td className="border px-2 py-2">
+                <td className="border px-2 py-1">
                   {sale["MONTANT TTC"]
                     ? formatNumber(sale["MONTANT TTC"])
                     : "N/A"}
                 </td>
-                <td className="border px-2 py-2">
+                <td className="border px-2 py-1">
                   {sale["MONTANT HT"]
                     ? formatNumber(sale["MONTANT HT"])
                     : "N/A"}
                 </td>
-                <td className="border px-2 py-2">
+                <td className="border px-2 py-1">
                   {sale.ETAT || "" /* Ne pas afficher "État inconnu" */}
                 </td>
-                <td className="border px-2 py-2 flex justify-center space-x-1">
+                <td className="border px-2 py-1 flex justify-center space-x-1">
                   <button
                     onClick={() => router.push(`/sales/edit/${sale._id}`)}
                     className="px-2 py-1 bg-blue-500 text-white rounded-lg"
@@ -518,19 +517,22 @@ const AllSales = () => {
                 </td>
               </tr>
             ))}
-            {/* Ligne pour le total HT */}
+            {/* Ligne pour les totaux HT et TTC */}
             <tr
               className="bg-gray-200 font-bold cursor-pointer"
               onMouseEnter={handleTotalMouseEnter}
               onMouseLeave={handleTotalMouseLeave}
             >
-              <td colSpan="5" className="border px-4 py-2 text-right">
-                Total HT :
+              <td colSpan="5" className="border px-2 py-1 text-right">
+                Total TTC :
               </td>
-              <td className="border px-4 py-2">
+              <td className="border px-2 py-1">
+                {formatNumber(calculateTotalTTC())}
+              </td>
+              <td className="border px-2 py-1">
                 {formatNumber(calculateTotalHT())}
               </td>
-              <td colSpan="3" className="border px-4 py-2"></td>
+              <td colSpan="2" className="border px-2 py-1"></td>
             </tr>
           </tbody>
         </table>
@@ -739,13 +741,28 @@ const AllSales = () => {
         }
         th,
         td {
-          padding: 8px;
+          padding: 4px; /* Réduit de px-2 py-1 */
           border: 1px solid #d1d5db;
           white-space: nowrap;
           text-align: center;
+          font-family: Arial, sans-serif; /* Assure Arial pour les cellules */
+          font-size: 14px; /* Taille du texte à 14px */
+        }
+        th {
+          font-weight: bold;
+        }
+        .font-arial {
+          font-family: Arial, sans-serif;
         }
         footer button:hover {
           background-color: #ffffff44;
+        }
+        /* Ajustement des boutons dans le modal */
+        .bg-blue-500:hover,
+        .bg-green-500:hover,
+        .bg-yellow-500:hover,
+        .bg-red-500:hover {
+          opacity: 0.8;
         }
       `}</style>
     </div>

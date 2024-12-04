@@ -6,6 +6,17 @@ import Navbar from "@/components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSave, faFile } from "@fortawesome/free-solid-svg-icons";
 
+const normalizeString = (str) => {
+  return str
+    ? str
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+    : "";
+};
+
+const TVA_RATE_DEFAULT = 20; // Taux de TVA par défaut en pourcentage
+
 const EditSale = () => {
   const { id } = useParams();
   const searchParams = useSearchParams();
@@ -25,7 +36,7 @@ const EditSale = () => {
           credentials: "include",
         });
         if (!response.ok) {
-          throw new Error(`Failed to fetch sale with status ${response.status}`);
+          throw new Error(`Échec de la récupération de la vente : ${response.status}`);
         }
         const data = await response.json();
         if (saleDate) {
@@ -33,8 +44,8 @@ const EditSale = () => {
         }
         setSale(data.data);
       } catch (error) {
-        console.error("Error fetching sale data:", error);
-        setError(`Error: ${error.message}`);
+        console.error("Erreur lors de la récupération des données de la vente :", error);
+        setError(`Erreur : ${error.message}`);
       } finally {
         setLoading(false);
       }
@@ -48,20 +59,18 @@ const EditSale = () => {
     setSale((prev) => {
       const updatedSale = { ...prev, [name]: value };
 
-      // Calculer MONTANT TTC lorsque MONTANT HT ou TAUX TVA change
-      if (
-        (name === "MONTANT HT" || name === "TAUX TVA") &&
-        updatedSale["MONTANT HT"] &&
-        updatedSale["TAUX TVA"]
-      ) {
-        const montantHT = parseFloat(updatedSale["MONTANT HT"]) || 0;
-        let tauxTVA = parseFloat(updatedSale["TAUX TVA"]) || 0;
+      // Calculer MONTANT HT en fonction du Montant TTC et du Taux TVA
+      if (name === "MONTANT TTC" || name === "TAUX TVA") {
+        const montantTTC = parseFloat(updatedSale["MONTANT TTC"]) || 0;
+        let tauxTVA = parseFloat(updatedSale["TAUX TVA"]) || TVA_RATE_DEFAULT;
         // Si le taux TVA est supérieur à 1, on considère qu'il est exprimé en pourcentage
         if (tauxTVA > 1) {
           tauxTVA = tauxTVA / 100;
         }
-        const montantTTC = montantHT + montantHT * tauxTVA;
-        updatedSale["MONTANT TTC"] = montantTTC.toFixed(2); // Arrondir à deux décimales
+
+        // Calculer le montant HT
+        const montantHT = montantTTC / (1 + tauxTVA);
+        updatedSale["MONTANT HT"] = montantHT > 0 ? montantHT.toFixed(2) : "0.00";
       }
 
       return updatedSale;
@@ -104,10 +113,10 @@ const EditSale = () => {
         }, 2000);
       } else {
         const errorData = await response.json();
-        throw new Error(errorData.message || `Error: ${response.status}`);
+        throw new Error(errorData.message || `Erreur : ${response.status}`);
       }
     } catch (error) {
-      console.error("Error saving sale:", error.message);
+      console.error("Erreur lors de la sauvegarde de la vente :", error.message);
       setNotification({
         type: "error",
         message: `Erreur lors de la sauvegarde : ${error.message}`,
@@ -248,8 +257,8 @@ const EditSale = () => {
                 );
               }
 
-              // Champ pour "MONTANT HT"
-              if (key === "MONTANT HT") {
+              // Champ pour "MONTANT TTC" en modifiable et "MONTANT HT" en lecture seule
+              if (key === "MONTANT TTC") {
                 return (
                   <div className="mb-4" key={key}>
                     <label className="block text-gray-800 font-semibold mb-2">
@@ -258,27 +267,27 @@ const EditSale = () => {
                     <input
                       className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
                       type="number"
-                      name={key}
+                      name="MONTANT TTC"
                       value={value || ""}
                       onChange={handleInputChange}
                       step="0.01"
                       min="0"
+                      placeholder="Montant TTC"
                     />
                   </div>
                 );
               }
 
-              // Champ "MONTANT TTC" en lecture seule
-              if (key === "MONTANT TTC") {
+              if (key === "MONTANT HT") {
                 return (
                   <div className="mb-4" key={key}>
                     <label className="block text-gray-800 font-semibold mb-2">
-                      {key.replace(/_/g, " ")}
+                      Montant HT (Calculé)
                     </label>
                     <input
                       className="border border-gray-300 p-2 rounded-md w-full bg-gray-100 cursor-not-allowed"
-                      type="number"
-                      name={key}
+                      type="text"
+                      name="MONTANT HT"
                       value={value || ""}
                       readOnly
                     />
@@ -298,12 +307,25 @@ const EditSale = () => {
                     name={key}
                     value={value || ""}
                     onChange={handleInputChange}
-                    required={["NOM DU CLIENT"].includes(key)} // "DATE DE VENTE" n'est plus obligatoire
+                    required={["NOM DU CLIENT", "prenom", "ADRESSE DU CLIENT"].includes(key)} // Définir les champs obligatoires
                   />
                 </div>
               );
             })}
           </div>
+
+          {/* Ajout d'un espace pour les notes ou autres champs si nécessaire */}
+          {/* <div className="mb-4">
+            <label className="block text-gray-800 font-semibold mb-2">Notes</label>
+            <textarea
+              className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
+              name="notes"
+              value={sale.notes || ""}
+              onChange={handleInputChange}
+              placeholder="Ajouter des notes"
+            ></textarea>
+          </div> */}
+
           <div className="flex justify-center space-x-4 mt-6">
             <button
               className="bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transform transition duration-300 hover:scale-105"
