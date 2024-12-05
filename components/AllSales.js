@@ -38,15 +38,24 @@ const formatDate = (dateStr) => {
     : date.toLocaleDateString("fr-FR");
 };
 
-// Fonction pour formater les nombres
+// Fonction pour formater les nombres avec le symbole euro
 const formatNumber = (value) => {
   const number = parseFloat(value);
-  return isNaN(number) ? value : number.toFixed(2) + " €";
+  if (isNaN(number)) return value;
+
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(number);
 };
 
 // Liste des états à exclure (sans "annule")
 const EXCLUDED_STATES = [
-  // ... votre liste d'états ...
+  // Ajoutez ici les états que vous souhaitez exclure
+  "annule", // Exemple
+  // ...
 ];
 
 // Fonction pour déterminer si un état doit être exclu
@@ -147,6 +156,15 @@ const AllSales = () => {
   const [currentPage, setCurrentPage] = useState(1); // Page actuelle
   const [totalPages, setTotalPages] = useState(1); // Nombre total de pages
 
+  // État pour gérer les ventes cachées
+  const [hiddenSales, setHiddenSales] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('hiddenSales');
+      return stored ? JSON.parse(stored) : [];
+    }
+    return [];
+  });
+
   const router = useRouter();
 
   const tableRef = useRef(null);
@@ -182,12 +200,14 @@ const AllSales = () => {
       const saleDate = new Date(sale["DATE DE VENTE"]);
       const etat = normalizeString(sale.ETAT || "");
 
-      // Inclure les ventes même si l'état est vide
+      // Inclure les ventes même si l'état est vide, mais pas celles cachées
       return (
         (!showAllSales
           ? saleDate.getMonth() === selectedMonth &&
             saleDate.getFullYear() === selectedYear
-          : true) && !isExcludedState(etat)
+          : true) &&
+        !isExcludedState(etat) &&
+        !hiddenSales.includes(sale._id)
       );
     });
 
@@ -246,6 +266,7 @@ const AllSales = () => {
     sales,
     currentPage,
     searchTerm,
+    hiddenSales, // Ajouter hiddenSales comme dépendance
   ]);
 
   const handleMonthChange = (month) => {
@@ -437,15 +458,22 @@ Prévision Chantier: ${sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION C
   // Obtenir la taille de la fenêtre pour Confetti
   const { width, height } = useWindowSize();
 
-  // Fonction pour supprimer une vente de l'affichage avec confirmation
-  const handleDeleteSale = (sale) => {
-    if (
-      confirm("Êtes-vous sûr de vouloir retirer cette vente de l'affichage ?")
-    ) {
-      // Retirer la vente de l'état `sales`
-      setSales((prevSales) => prevSales.filter((s) => s._id !== sale._id));
-      alert("Vente retirée de l'affichage.");
-    }
+  // Fonction pour cacher une vente de l'affichage sans la supprimer du backend
+  const handleHideSale = (sale) => {
+    const confirmation = confirm("Êtes-vous sûr de vouloir cacher cette vente de l'affichage ?");
+    if (!confirmation) return;
+
+    // Ajouter l'ID de la vente cachée
+    const updatedHiddenSales = [...hiddenSales, sale._id];
+    setHiddenSales(updatedHiddenSales);
+
+    // Stocker dans le localStorage
+    localStorage.setItem('hiddenSales', JSON.stringify(updatedHiddenSales));
+
+    // Mettre à jour l'état local en supprimant la vente
+    setSales((prevSales) => prevSales.filter((s) => s._id !== sale._id));
+    setDisplayedSales((prevDisplayedSales) => prevDisplayedSales.filter((s) => s._id !== sale._id));
+    alert("Vente cachée avec succès.");
   };
 
   // Fonction pour sauvegarder les modifications de la vente
@@ -557,18 +585,18 @@ Prévision Chantier: ${sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION C
         <table ref={tableRef} className="min-w-full bg-white text-gray-800 text-sm">
           <thead className="bg-gray-700 text-white">
             <tr>
-              <th className="px-2 py-1">Date</th>
-              <th className="px-2 py-1">Nom</th>
-              <th className="px-2 py-1">Téléphone</th>
-              <th className="px-2 py-1">Adresse</th>
-              <th className="px-2 py-1">Ville</th>
-              <th className="px-2 py-1">Vendeur</th>
-              <th className="px-2 py-1">Désignation</th>
-              <th className="px-2 py-1">Montant TTC</th>
-              <th className="px-2 py-1">Montant HT</th>
-              <th className="px-2 py-1">Prévision Chantier</th> {/* Nouvelle colonne */}
-              <th className="px-2 py-1">État</th>
-              <th className="px-2 py-1">Actions</th>
+              <th scope="col" className="px-2 py-1 text-xs md:text-sm">Date</th>
+              <th scope="col" className="px-2 py-1 text-xs md:text-sm">Nom</th>
+              <th scope="col" className="px-2 py-1 text-xs md:text-sm">Téléphone</th>
+              <th scope="col" className="px-2 py-1 text-xs md:text-sm">Adresse</th>
+              <th scope="col" className="px-2 py-1 text-xs md:text-sm">Ville</th>
+              <th scope="col" className="px-2 py-1 text-xs md:text-sm">Vendeur</th>
+              <th scope="col" className="px-2 py-1 text-xs md:text-sm">Désignation</th>
+              <th scope="col" className="px-2 py-1 text-xs md:text-sm">Montant TTC</th>
+              <th scope="col" className="px-2 py-1 text-xs md:text-sm">Montant HT</th>
+              <th scope="col" className="px-2 py-1 text-xs md:text-sm">Prévision Chantier</th>
+              <th scope="col" className="px-2 py-1 text-xs md:text-sm">État</th>
+              <th scope="col" className="px-2 py-1 text-xs md:text-sm">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -584,7 +612,7 @@ Prévision Chantier: ${sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION C
                 } hover:bg-gray-100`}
                 onDoubleClick={() => handleRowDoubleClick(sale)}
               >
-                <td className="border px-2 py-1 relative">
+                <td className="border px-2 py-1 relative text-xs md:text-sm">
                   {formatDate(sale["DATE DE VENTE"])}
                   {/* Barre de progression */}
                   <div className="absolute bottom-0 left-0 w-full mt-1">
@@ -596,35 +624,39 @@ Prévision Chantier: ${sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION C
                     </div>
                   </div>
                 </td>
-                <td className="border px-2 py-1">{sale["NOM DU CLIENT"]}</td>
-                <td className="border px-2 py-1">{sale.TELEPHONE}</td>
-                <td className="border px-2 py-1">
+                <td className="border px-2 py-1 text-xs md:text-sm">
+                  {sale["NOM DU CLIENT"]}
+                </td>
+                <td className="border px-2 py-1 text-xs md:text-sm">
+                  {sale.TELEPHONE}
+                </td>
+                <td className="border px-2 py-1 text-xs md:text-sm">
                   {sale["ADRESSE DU CLIENT"] || "Adresse manquante"}
                 </td>
-                <td className="border px-2 py-1">
+                <td className="border px-2 py-1 text-xs md:text-sm">
                   {sale.VILLE || "Ville manquante"}
                 </td>
-                <td className="border px-2 py-1">
+                <td className="border px-2 py-1 text-xs md:text-sm">
                   {sale["VENDEUR"] || "Vendeur inconnu"}
                 </td>
-                <td className="border px-2 py-1">
+                <td className="border px-2 py-1 text-xs md:text-sm">
                   {sale["DESIGNATION"] || "Désignation manquante"}
                 </td>
-                <td className="border px-2 py-1">
+                <td className="border px-2 py-1 text-xs md:text-sm text-right">
                   {formatNumber(sale["MONTANT TTC"])}
                 </td>
-                <td className="border px-2 py-1">
+                <td className="border px-2 py-1 text-xs md:text-sm text-right">
                   {formatNumber(sale["MONTANT HT"])}
                 </td>
-                <td className="border px-2 py-1">
+                <td className="border px-2 py-1 text-xs md:text-sm">
                   {sale["PREVISION CHANTIER"]
                     ? formatDate(sale["PREVISION CHANTIER"])
-                    : "Non définie"}
+                    : ""}
                 </td>
-                <td className="border px-2 py-1">
+                <td className="border px-2 py-1 text-xs md:text-sm">
                   {sale.ETAT || ""}
                 </td>
-                <td className="border px-2 py-1 flex justify-center space-x-1">
+                <td className="border px-2 py-1 flex justify-center space-x-1 text-xs md:text-sm">
                   <button
                     onClick={() => router.push(`/sales/edit/${sale._id}`)}
                     className="px-2 py-1 bg-blue-500 text-white rounded-lg"
@@ -654,9 +686,9 @@ Prévision Chantier: ${sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION C
                     <FontAwesomeIcon icon={faCopy} />
                   </button>
                   <button
-                    onClick={() => handleDeleteSale(sale)}
+                    onClick={() => handleHideSale(sale)} // Utilisation de handleHideSale
                     className="px-2 py-1 bg-red-500 text-white rounded-lg"
-                    title="Supprimer la vente" // Tooltip ajouté
+                    title="Cacher la vente" // Tooltip mis à jour
                   >
                     <FontAwesomeIcon icon={faTrash} />
                   </button>
@@ -669,16 +701,18 @@ Prévision Chantier: ${sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION C
               onMouseEnter={handleTotalMouseEnter}
               onMouseLeave={handleTotalMouseLeave}
             >
-              <td colSpan="10" className="border px-2 py-1 text-right">
-                Total TTC :
+              <td colSpan="7" className="border px-2 py-1 text-right">
+                Totaux :
               </td>
-              <td className="border px-2 py-1">
+              <td className="border px-2 py-1 text-xs md:text-sm text-right">
                 {formatNumber(calculateTotalTTC())}
               </td>
-              <td className="border px-2 py-1">
+              <td className="border px-2 py-1 text-xs md:text-sm text-right">
                 {formatNumber(calculateTotalHT())}
               </td>
-              <td className="border px-2 py-1"></td>
+              <td className="border px-2 py-1 text-xs md:text-sm"></td>
+              <td className="border px-2 py-1 text-xs md:text-sm"></td>
+              <td className="border px-2 py-1 text-xs md:text-sm"></td>
             </tr>
           </tbody>
         </table>
@@ -987,7 +1021,7 @@ Prévision Chantier: ${sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION C
           padding: 4px; /* Réduit de px-2 py-1 */
           border: 1px solid #d1d5db;
           white-space: nowrap;
-          text-align: center;
+          text-align: center; /* Peut être modifié pour certains éléments */
           font-family: Arial, sans-serif; /* Assure Arial pour les cellules */
           font-size: 14px; /* Taille du texte à 14px */
         }
