@@ -10,10 +10,12 @@ import {
   faMoneyBillWave,
   faTimes,
   faTrash,
+  faCopy, // Icône pour la copie
 } from "@fortawesome/free-solid-svg-icons";
 import Confetti from "react-confetti";
 import useWindowSize from "react-use/lib/useWindowSize";
 
+// Fonction pour normaliser les chaînes de caractères
 const normalizeString = (str) => {
   return str
     ? str
@@ -23,8 +25,10 @@ const normalizeString = (str) => {
     : "";
 };
 
-const ITEMS_PER_PAGE = 500; // Nombre d'éléments par page
+// Nombre d'éléments par page
+const ITEMS_PER_PAGE = 500;
 
+// Fonction pour formater les dates
 const formatDate = (dateStr) => {
   if (!dateStr) return "Date invalide";
 
@@ -34,12 +38,13 @@ const formatDate = (dateStr) => {
     : date.toLocaleDateString("fr-FR");
 };
 
+// Fonction pour formater les nombres
 const formatNumber = (value) => {
   const number = parseFloat(value);
   return isNaN(number) ? value : number.toFixed(2) + " €";
 };
 
-// Liste des états à exclure
+// Liste des états à exclure (sans "annule")
 const EXCLUDED_STATES = [
   "dnv",
   "pdc",
@@ -72,8 +77,10 @@ const EXCLUDED_STATES = [
   "nd enfants s'occupent",
   "rdv reporté",
   "nd mr veut pas",
+  // "annule", // Retiré pour afficher les ventes annulées
 ];
 
+// Fonction pour déterminer si un état doit être exclu
 const isExcludedState = (etat) => {
   // Ne pas exclure les ventes avec un état vide
   if (!etat) return false;
@@ -91,43 +98,57 @@ const isExcludedState = (etat) => {
   return dvRegex.test(etat) || numberRegex.test(etat);
 };
 
-// Fonction pour traiter les montants HT et TTC
+// Fonction pour traiter les montants HT et TTC et supprimer les doublons
 const processSalesData = (salesData) => {
-  return salesData.map((sale) => {
-    let montantHT = parseFloat(sale["MONTANT HT"]);
-    let montantTTC = parseFloat(sale["MONTANT TTC"]);
-    let tauxTVA = parseFloat(sale["TAUX TVA"]) || 5.5; // Valeur par défaut
+  const uniqueSales = [];
+  const seen = new Set();
 
-    // Si le taux de TVA est supérieur à 1, le considérer comme un pourcentage
-    if (tauxTVA > 1) {
-      tauxTVA = tauxTVA / 100;
+  salesData.forEach((sale) => {
+    // Définir un identifiant unique pour chaque vente basée sur certains champs
+    const identifier = `${normalizeString(sale["NOM DU CLIENT"])}|${formatDate(
+      sale["DATE DE VENTE"]
+    )}|${sale["MONTANT TTC"]}|${sale["VENDEUR"]}`;
+
+    if (!seen.has(identifier)) {
+      seen.add(identifier);
+
+      let montantHT = parseFloat(sale["MONTANT HT"]);
+      let montantTTC = parseFloat(sale["MONTANT TTC"]);
+      let tauxTVA = parseFloat(sale["TAUX TVA"]) || 5.5; // Valeur par défaut
+
+      // Si le taux de TVA est supérieur à 1, le considérer comme un pourcentage
+      if (tauxTVA > 1) {
+        tauxTVA = tauxTVA / 100;
+      }
+
+      // Calculer Montant TTC si manquant
+      if (isNaN(montantTTC) && !isNaN(montantHT)) {
+        montantTTC = montantHT * (1 + tauxTVA);
+        sale["MONTANT TTC"] = montantTTC.toFixed(2);
+      }
+
+      // Calculer Montant HT si manquant
+      if (isNaN(montantHT) && !isNaN(montantTTC)) {
+        montantHT = montantTTC / (1 + tauxTVA);
+        sale["MONTANT HT"] = montantHT.toFixed(2);
+      }
+
+      // Si les deux sont manquants, les initialiser à 0
+      if (isNaN(montantHT) && isNaN(montantTTC)) {
+        sale["MONTANT HT"] = "0.00";
+        sale["MONTANT TTC"] = "0.00";
+      }
+
+      // Assurer que le taux de TVA est toujours présent
+      if (!sale["TAUX TVA"]) {
+        sale["TAUX TVA"] = "5.5";
+      }
+
+      uniqueSales.push(sale);
     }
-
-    // Calculer Montant TTC si manquant
-    if (isNaN(montantTTC) && !isNaN(montantHT)) {
-      montantTTC = montantHT * (1 + tauxTVA);
-      sale["MONTANT TTC"] = montantTTC.toFixed(2);
-    }
-
-    // Calculer Montant HT si manquant
-    if (isNaN(montantHT) && !isNaN(montantTTC)) {
-      montantHT = montantTTC / (1 + tauxTVA);
-      sale["MONTANT HT"] = montantHT.toFixed(2);
-    }
-
-    // Si les deux sont manquants, les initialiser à 0
-    if (isNaN(montantHT) && isNaN(montantTTC)) {
-      sale["MONTANT HT"] = "0.00";
-      sale["MONTANT TTC"] = "0.00";
-    }
-
-    // Assurer que le taux de TVA est toujours présent
-    if (!sale["TAUX TVA"]) {
-      sale["TAUX TVA"] = "5.5";
-    }
-
-    return sale;
   });
+
+  return uniqueSales;
 };
 
 const AllSales = () => {
@@ -202,7 +223,9 @@ const AllSales = () => {
         (sale) =>
           normalizeString(sale["NOM DU CLIENT"]).includes(searchTerm) ||
           normalizeString(sale["TELEPHONE"]).includes(searchTerm) ||
-          normalizeString(sale["ADRESSE DU CLIENT"]).includes(searchTerm)
+          normalizeString(sale["ADRESSE DU CLIENT"]).includes(searchTerm) ||
+          normalizeString(sale["VENDEUR"]).includes(searchTerm) || // Inclure le vendeur dans la recherche
+          normalizeString(sale["DESIGNATION"]).includes(searchTerm) // Inclure la désignation dans la recherche
       );
     }
 
@@ -391,6 +414,31 @@ const AllSales = () => {
     }, 0);
   };
 
+  // Fonction pour copier une ligne de vente
+  const handleCopySale = (sale) => {
+    const saleData = `
+Date de Vente: ${formatDate(sale["DATE DE VENTE"])}
+Nom du Client: ${sale["NOM DU CLIENT"]}
+Téléphone: ${sale.TELEPHONE}
+Adresse: ${sale["ADRESSE DU CLIENT"] || "Adresse manquante"}
+Ville: ${sale.VILLE || "Ville manquante"}
+Vendeur: ${sale["VENDEUR"] || "Vendeur inconnu"} // Mise à jour
+Désignation: ${sale["DESIGNATION"] || "Désignation manquante"} // Mise à jour
+Montant TTC: ${formatNumber(sale["MONTANT TTC"])}
+Montant HT: ${formatNumber(sale["MONTANT HT"])}
+État: ${sale.ETAT || "État inconnu"}
+    `;
+    navigator.clipboard
+      .writeText(saleData)
+      .then(() => {
+        alert("Vente copiée dans le presse-papiers !");
+      })
+      .catch((err) => {
+        console.error("Erreur lors de la copie :", err);
+        alert("Erreur lors de la copie.");
+      });
+  };
+
   // Gestion de l'animation des confettis
   const handleTotalMouseEnter = () => {
     setShowConfetti(true);
@@ -405,7 +453,9 @@ const AllSales = () => {
 
   // Fonction pour supprimer une vente de l'affichage avec confirmation
   const handleDeleteSale = (sale) => {
-    if (confirm("Êtes-vous sûr de vouloir retirer cette vente de l'affichage ?")) {
+    if (
+      confirm("Êtes-vous sûr de vouloir retirer cette vente de l'affichage ?")
+    ) {
       // Retirer la vente de l'état `sales`
       setSales((prevSales) => prevSales.filter((s) => s._id !== sale._id));
       alert("Vente retirée de l'affichage.");
@@ -445,7 +495,7 @@ const AllSales = () => {
             type="text"
             value={searchTerm}
             onChange={handleSearchChange}
-            placeholder="Rechercher par nom, téléphone, adresse"
+            placeholder="Rechercher par nom, téléphone, adresse, vendeur, désignation"
             className="w-full md:w-1/2 p-2 border border-gray-300 rounded-lg"
           />
           <button
@@ -469,6 +519,8 @@ const AllSales = () => {
             <option value="NOM DU CLIENT">Nom du Client</option>
             <option value="MONTANT HT">Montant HT</option>
             <option value="MONTANT TTC">Montant TTC</option>
+            <option value="VENDEUR">Vendeur</option> {/* Mise à jour */}
+            <option value="DESIGNATION">Désignation</option> {/* Mise à jour */}
             {/* Ajoutez d'autres options si nécessaire */}
           </select>
           <select
@@ -483,10 +535,7 @@ const AllSales = () => {
       </div>
 
       <div className="w-full overflow-x-auto mb-16">
-        <table
-          ref={tableRef}
-          className="min-w-full bg-white text-gray-800 text-sm"
-        >
+        <table ref={tableRef} className="min-w-full bg-white text-gray-800 text-sm">
           <thead className="bg-gray-700 text-white">
             <tr>
               <th className="px-2 py-1">Date</th>
@@ -494,6 +543,8 @@ const AllSales = () => {
               <th className="px-2 py-1">Téléphone</th>
               <th className="px-2 py-1">Adresse</th>
               <th className="px-2 py-1">Ville</th>
+              <th className="px-2 py-1">Vendeur</th> {/* Mise à jour */}
+              <th className="px-2 py-1">Désignation</th> {/* Mise à jour */}
               <th className="px-2 py-1">Montant TTC</th>
               <th className="px-2 py-1">Montant HT</th>
               <th className="px-2 py-1">État</th>
@@ -525,6 +576,12 @@ const AllSales = () => {
                   {sale.VILLE || "Ville manquante"}
                 </td>
                 <td className="border px-2 py-1">
+                  {sale["VENDEUR"] || "Vendeur inconnu"} {/* Mise à jour */}
+                </td>
+                <td className="border px-2 py-1">
+                  {sale["DESIGNATION"] || "Désignation manquante"} {/* Mise à jour */}
+                </td>
+                <td className="border px-2 py-1">
                   {formatNumber(sale["MONTANT TTC"])}
                 </td>
                 <td className="border px-2 py-1">
@@ -553,6 +610,13 @@ const AllSales = () => {
                     <FontAwesomeIcon icon={faMoneyBillWave} />
                   </button>
                   <button
+                    onClick={() => handleCopySale(sale)} // Nouvelle fonctionnalité de copie
+                    className="px-2 py-1 bg-purple-500 text-white rounded-lg"
+                    title="Copier la vente"
+                  >
+                    <FontAwesomeIcon icon={faCopy} />
+                  </button>
+                  <button
                     onClick={() => handleDeleteSale(sale)}
                     className="px-2 py-1 bg-red-500 text-white rounded-lg"
                   >
@@ -567,7 +631,7 @@ const AllSales = () => {
               onMouseEnter={handleTotalMouseEnter}
               onMouseLeave={handleTotalMouseLeave}
             >
-              <td colSpan="5" className="border px-2 py-1 text-right">
+              <td colSpan="7" className="border px-2 py-1 text-right">
                 Total TTC :
               </td>
               <td className="border px-2 py-1">
@@ -611,9 +675,9 @@ const AllSales = () => {
       {/* Modal pour gérer les paiements */}
       {isModalOpen && selectedSale && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white w-11/12 md:w-2/3 lg:w-1/2 p-4 rounded-lg">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">
+          <div className="bg-white w-11/12 md:w-2/3 lg:w-1/2 p-6 rounded-lg overflow-y-auto max-h-screen">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold">
                 Paiements pour {selectedSale["NOM DU CLIENT"]}
               </h2>
               <button
@@ -624,24 +688,82 @@ const AllSales = () => {
               </button>
             </div>
 
-            <div className="mb-4">
-              <div className="w-full bg-gray-200 rounded-full h-4 mb-4">
+            {/* Aperçu Global */}
+            <div className="mb-6 border-b pb-4">
+              <h3 className="text-xl font-semibold mb-2">Aperçu de la Vente</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p>
+                    <span className="font-bold">Date de Vente:</span>{" "}
+                    {formatDate(selectedSale["DATE DE VENTE"])}
+                  </p>
+                  <p>
+                    <span className="font-bold">Nom du Client:</span>{" "}
+                    {selectedSale["NOM DU CLIENT"]}
+                  </p>
+                  <p>
+                    <span className="font-bold">Téléphone:</span>{" "}
+                    {selectedSale.TELEPHONE}
+                  </p>
+                  <p>
+                    <span className="font-bold">Adresse:</span>{" "}
+                    {selectedSale["ADRESSE DU CLIENT"] || "Adresse manquante"}
+                  </p>
+                </div>
+                <div>
+                  <p>
+                    <span className="font-bold">Ville:</span>{" "}
+                    {selectedSale.VILLE || "Ville manquante"}
+                  </p>
+                  <p>
+                    <span className="font-bold">Vendeur:</span>{" "}
+                    {selectedSale["VENDEUR"] || "Vendeur inconnu"} {/* Mise à jour */}
+                  </p>
+                  <p>
+                    <span className="font-bold">Désignation:</span>{" "}
+                    {selectedSale["DESIGNATION"] || "Désignation manquante"} {/* Mise à jour */}
+                  </p>
+                  <p>
+                    <span className="font-bold">État:</span>{" "}
+                    {selectedSale.ETAT || "État inconnu"}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <p>
+                  <span className="font-bold">Montant TTC:</span>{" "}
+                  {formatNumber(selectedSale["MONTANT TTC"])}
+                </p>
+                <p>
+                  <span className="font-bold">Montant HT:</span>{" "}
+                  {formatNumber(selectedSale["MONTANT HT"])}
+                </p>
+              </div>
+            </div>
+
+            {/* Progression des Paiements */}
+            <div className="mb-6">
+              <h3 className="font-bold mb-2">Progression des Paiements :</h3>
+              <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
                 <div
                   className="bg-green-500 h-4 rounded-full"
                   style={{ width: `${calculateProgress()}%` }}
                 ></div>
               </div>
               <p>
-                Montant total :{" "}
+                <span className="font-bold">Montant total :</span>{" "}
                 {formatNumber(
                   parseFloat(selectedSale["MONTANT TTC"]) ||
                     parseFloat(selectedSale["MONTANT HT"]) ||
                     0
                 )}
               </p>
-              <p>Montant payé : {formatNumber(calculateTotalPaid())}</p>
               <p>
-                Montant restant :{" "}
+                <span className="font-bold">Montant payé :</span>{" "}
+                {formatNumber(calculateTotalPaid())}
+              </p>
+              <p>
+                <span className="font-bold">Montant restant :</span>{" "}
                 {formatNumber(
                   (parseFloat(selectedSale["MONTANT TTC"]) ||
                     parseFloat(selectedSale["MONTANT HT"]) ||
@@ -650,23 +772,32 @@ const AllSales = () => {
               </p>
             </div>
 
-            <div className="mb-4">
+            {/* Historique des Paiements */}
+            <div className="mb-6">
               <h3 className="font-bold mb-2">Historique des paiements :</h3>
-              <ul>
-                {payments.map((payment) => (
-                  <li key={payment.id} className="mb-2">
-                    {formatDate(payment.date)} - {formatNumber(payment.montant)}
-                    {payment.comment && (
-                      <p className="text-sm text-gray-600">
-                        Commentaire : {payment.comment}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              {payments.length > 0 ? (
+                <ul className="list-disc list-inside">
+                  {payments.map((payment) => (
+                    <li key={payment.id} className="mb-2">
+                      <span className="font-medium">
+                        {formatDate(payment.date)}
+                      </span>{" "}
+                      - {formatNumber(payment.montant)}
+                      {payment.comment && (
+                        <p className="text-sm text-gray-600">
+                          Commentaire : {payment.comment}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>Aucun paiement enregistré.</p>
+              )}
             </div>
 
-            <div className="mb-4">
+            {/* Ajouter un Paiement */}
+            <div className="mb-6">
               <h3 className="font-bold mb-2">Ajouter un paiement :</h3>
               <div className="flex flex-col space-y-2">
                 <input
@@ -805,7 +936,8 @@ const AllSales = () => {
         .bg-blue-500:hover,
         .bg-green-500:hover,
         .bg-yellow-500:hover,
-        .bg-red-500:hover {
+        .bg-red-500:hover,
+        .bg-purple-500:hover { /* Ajout de la couleur pour le bouton de copie */
           opacity: 0.8;
         }
       `}</style>
