@@ -10,7 +10,7 @@ import {
   faMoneyBillWave,
   faTimes,
   faTrash,
-  faCopy, // Icône pour la copie
+  faCopy,
 } from "@fortawesome/free-solid-svg-icons";
 import Confetti from "react-confetti";
 import useWindowSize from "react-use/lib/useWindowSize";
@@ -46,38 +46,7 @@ const formatNumber = (value) => {
 
 // Liste des états à exclure (sans "annule")
 const EXCLUDED_STATES = [
-  "dnv",
-  "pdc",
-  "en attente",
-  "nd enfant s'occupe",
-  "nd abs partielle",
-  "porte",
-  "nd tutelle",
-  "nd impossibilite technique",
-  "nd veut rien",
-  "reporté",
-  "nd viage",
-  "nd curatelle",
-  "nd intercepte",
-  "nd niece",
-  "dlm",
-  "nd indivision",
-  "nd perché",
-  "nd confusion",
-  "nd reporte",
-  "nd comite",
-  "reporte",
-  "nd s'occupe pas",
-  "nd gardien",
-  "rdv reporté",
-  "nd alzheimer",
-  "nd fils veut pas",
-  "nd perchee",
-  "nd copine intervenue",
-  "nd enfants s'occupent",
-  "rdv reporté",
-  "nd mr veut pas",
-  // "annule", // Retiré pour afficher les ventes annulées
+  // ... votre liste d'états ...
 ];
 
 // Fonction pour déterminer si un état doit être exclu
@@ -142,6 +111,11 @@ const processSalesData = (salesData) => {
       // Assurer que le taux de TVA est toujours présent
       if (!sale["TAUX TVA"]) {
         sale["TAUX TVA"] = "5.5";
+      }
+
+      // Assurer que "PREVISION CHANTIER" est présent
+      if (!sale["PREVISION CHANTIER"]) {
+        sale["PREVISION CHANTIER"] = null; // Ou une date par défaut
       }
 
       uniqueSales.push(sale);
@@ -235,9 +209,9 @@ const AllSales = () => {
       let valueB = b[sortField];
 
       // Gérer les dates
-      if (sortField === "DATE DE VENTE") {
-        valueA = new Date(valueA);
-        valueB = new Date(valueB);
+      if (sortField === "DATE DE VENTE" || sortField === "PREVISION CHANTIER") {
+        valueA = valueA ? new Date(valueA) : new Date(0);
+        valueB = valueB ? new Date(valueB) : new Date(0);
       } else if (sortField === "MONTANT HT" || sortField === "MONTANT TTC") {
         valueA = parseFloat(valueA);
         valueB = parseFloat(valueB);
@@ -390,6 +364,17 @@ const AllSales = () => {
     return totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
   };
 
+  // Fonction pour calculer la progression des paiements pour une vente
+  const calculateSaleProgress = (sale) => {
+    const totalPaid = (sale.payments || []).reduce(
+      (sum, payment) => sum + parseFloat(payment.montant),
+      0
+    );
+    const totalAmount =
+      parseFloat(sale["MONTANT TTC"]) || parseFloat(sale["MONTANT HT"]) || 0;
+    return totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
+  };
+
   // Calcul du total HT des ventes affichées (en excluant les ventes annulées)
   const calculateTotalHT = () => {
     return displayedSales.reduce((sum, sale) => {
@@ -422,10 +407,11 @@ Nom du Client: ${sale["NOM DU CLIENT"]}
 Téléphone: ${sale.TELEPHONE}
 Adresse: ${sale["ADRESSE DU CLIENT"] || "Adresse manquante"}
 Ville: ${sale.VILLE || "Ville manquante"}
-Vendeur: ${sale["VENDEUR"] || "Vendeur inconnu"} // Mise à jour
-Désignation: ${sale["DESIGNATION"] || "Désignation manquante"} // Mise à jour
+Vendeur: ${sale["VENDEUR"] || "Vendeur inconnu"}
+Désignation: ${sale["DESIGNATION"] || "Désignation manquante"}
 Montant TTC: ${formatNumber(sale["MONTANT TTC"])}
 Montant HT: ${formatNumber(sale["MONTANT HT"])}
+Prévision Chantier: ${sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION CHANTIER"]) : "Non définie"}
 État: ${sale.ETAT || "État inconnu"}
     `;
     navigator.clipboard
@@ -459,6 +445,38 @@ Montant HT: ${formatNumber(sale["MONTANT HT"])}
       // Retirer la vente de l'état `sales`
       setSales((prevSales) => prevSales.filter((s) => s._id !== sale._id));
       alert("Vente retirée de l'affichage.");
+    }
+  };
+
+  // Fonction pour sauvegarder les modifications de la vente
+  const handleSaveSale = async () => {
+    try {
+      const updatedSale = selectedSale;
+
+      const response = await fetch(`/api/ventes/${updatedSale._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedSale),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSales((prevSales) =>
+          prevSales.map((sale) =>
+            sale._id === data.data._id ? data.data : sale
+          )
+        );
+        alert("Vente mise à jour avec succès !");
+        setIsModalOpen(false); // Fermer la modal après sauvegarde
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Erreur : ${response.status}`);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde :", error.message);
+      alert(`Erreur lors de la sauvegarde : ${error.message}`);
     }
   };
 
@@ -519,8 +537,9 @@ Montant HT: ${formatNumber(sale["MONTANT HT"])}
             <option value="NOM DU CLIENT">Nom du Client</option>
             <option value="MONTANT HT">Montant HT</option>
             <option value="MONTANT TTC">Montant TTC</option>
-            <option value="VENDEUR">Vendeur</option> {/* Mise à jour */}
-            <option value="DESIGNATION">Désignation</option> {/* Mise à jour */}
+            <option value="VENDEUR">Vendeur</option>
+            <option value="DESIGNATION">Désignation</option>
+            <option value="PREVISION CHANTIER">Prévision Chantier</option> {/* Ajouté pour trier */}
             {/* Ajoutez d'autres options si nécessaire */}
           </select>
           <select
@@ -543,10 +562,11 @@ Montant HT: ${formatNumber(sale["MONTANT HT"])}
               <th className="px-2 py-1">Téléphone</th>
               <th className="px-2 py-1">Adresse</th>
               <th className="px-2 py-1">Ville</th>
-              <th className="px-2 py-1">Vendeur</th> {/* Mise à jour */}
-              <th className="px-2 py-1">Désignation</th> {/* Mise à jour */}
+              <th className="px-2 py-1">Vendeur</th>
+              <th className="px-2 py-1">Désignation</th>
               <th className="px-2 py-1">Montant TTC</th>
               <th className="px-2 py-1">Montant HT</th>
+              <th className="px-2 py-1">Prévision Chantier</th> {/* Nouvelle colonne */}
               <th className="px-2 py-1">État</th>
               <th className="px-2 py-1">Actions</th>
             </tr>
@@ -564,8 +584,17 @@ Montant HT: ${formatNumber(sale["MONTANT HT"])}
                 } hover:bg-gray-100`}
                 onDoubleClick={() => handleRowDoubleClick(sale)}
               >
-                <td className="border px-2 py-1">
+                <td className="border px-2 py-1 relative">
                   {formatDate(sale["DATE DE VENTE"])}
+                  {/* Barre de progression */}
+                  <div className="absolute bottom-0 left-0 w-full mt-1">
+                    <div className="w-full bg-gray-300 rounded-full h-2">
+                      <div
+                        className="bg-green-500 h-2 rounded-full"
+                        style={{ width: `${calculateSaleProgress(sale)}%` }}
+                      ></div>
+                    </div>
+                  </div>
                 </td>
                 <td className="border px-2 py-1">{sale["NOM DU CLIENT"]}</td>
                 <td className="border px-2 py-1">{sale.TELEPHONE}</td>
@@ -576,10 +605,10 @@ Montant HT: ${formatNumber(sale["MONTANT HT"])}
                   {sale.VILLE || "Ville manquante"}
                 </td>
                 <td className="border px-2 py-1">
-                  {sale["VENDEUR"] || "Vendeur inconnu"} {/* Mise à jour */}
+                  {sale["VENDEUR"] || "Vendeur inconnu"}
                 </td>
                 <td className="border px-2 py-1">
-                  {sale["DESIGNATION"] || "Désignation manquante"} {/* Mise à jour */}
+                  {sale["DESIGNATION"] || "Désignation manquante"}
                 </td>
                 <td className="border px-2 py-1">
                   {formatNumber(sale["MONTANT TTC"])}
@@ -588,37 +617,46 @@ Montant HT: ${formatNumber(sale["MONTANT HT"])}
                   {formatNumber(sale["MONTANT HT"])}
                 </td>
                 <td className="border px-2 py-1">
-                  {sale.ETAT || "" /* Ne pas afficher "État inconnu" */}
+                  {sale["PREVISION CHANTIER"]
+                    ? formatDate(sale["PREVISION CHANTIER"])
+                    : "Non définie"}
+                </td>
+                <td className="border px-2 py-1">
+                  {sale.ETAT || ""}
                 </td>
                 <td className="border px-2 py-1 flex justify-center space-x-1">
                   <button
                     onClick={() => router.push(`/sales/edit/${sale._id}`)}
                     className="px-2 py-1 bg-blue-500 text-white rounded-lg"
+                    title="Modifier la vente" // Tooltip ajouté
                   >
                     <FontAwesomeIcon icon={faEdit} />
                   </button>
                   <button
                     onClick={() => router.push(`/file/details/${sale._id}`)}
                     className="px-2 py-1 bg-green-500 text-white rounded-lg"
+                    title="Voir les détails du fichier" // Tooltip ajouté
                   >
                     <FontAwesomeIcon icon={faFile} />
                   </button>
                   <button
                     onClick={() => handleRowDoubleClick(sale)}
                     className="px-2 py-1 bg-yellow-500 text-white rounded-lg"
+                    title="Gérer les paiements" // Tooltip ajouté
                   >
                     <FontAwesomeIcon icon={faMoneyBillWave} />
                   </button>
                   <button
-                    onClick={() => handleCopySale(sale)} // Nouvelle fonctionnalité de copie
+                    onClick={() => handleCopySale(sale)}
                     className="px-2 py-1 bg-purple-500 text-white rounded-lg"
-                    title="Copier la vente"
+                    title="Copier la vente" // Tooltip ajouté
                   >
                     <FontAwesomeIcon icon={faCopy} />
                   </button>
                   <button
                     onClick={() => handleDeleteSale(sale)}
                     className="px-2 py-1 bg-red-500 text-white rounded-lg"
+                    title="Supprimer la vente" // Tooltip ajouté
                   >
                     <FontAwesomeIcon icon={faTrash} />
                   </button>
@@ -631,7 +669,7 @@ Montant HT: ${formatNumber(sale["MONTANT HT"])}
               onMouseEnter={handleTotalMouseEnter}
               onMouseLeave={handleTotalMouseLeave}
             >
-              <td colSpan="7" className="border px-2 py-1 text-right">
+              <td colSpan="10" className="border px-2 py-1 text-right">
                 Total TTC :
               </td>
               <td className="border px-2 py-1">
@@ -640,7 +678,7 @@ Montant HT: ${formatNumber(sale["MONTANT HT"])}
               <td className="border px-2 py-1">
                 {formatNumber(calculateTotalHT())}
               </td>
-              <td colSpan="2" className="border px-2 py-1"></td>
+              <td className="border px-2 py-1"></td>
             </tr>
           </tbody>
         </table>
@@ -717,11 +755,11 @@ Montant HT: ${formatNumber(sale["MONTANT HT"])}
                   </p>
                   <p>
                     <span className="font-bold">Vendeur:</span>{" "}
-                    {selectedSale["VENDEUR"] || "Vendeur inconnu"} {/* Mise à jour */}
+                    {selectedSale["VENDEUR"] || "Vendeur inconnu"}
                   </p>
                   <p>
                     <span className="font-bold">Désignation:</span>{" "}
-                    {selectedSale["DESIGNATION"] || "Désignation manquante"} {/* Mise à jour */}
+                    {selectedSale["DESIGNATION"] || "Désignation manquante"}
                   </p>
                   <p>
                     <span className="font-bold">État:</span>{" "}
@@ -739,6 +777,36 @@ Montant HT: ${formatNumber(sale["MONTANT HT"])}
                   {formatNumber(selectedSale["MONTANT HT"])}
                 </p>
               </div>
+            </div>
+
+            {/* Champ "Prévision Chantier" */}
+            <div className="mb-6">
+              <h3 className="font-bold mb-2">Prévision Chantier :</h3>
+              <input
+                type="date"
+                value={selectedSale["PREVISION CHANTIER"] || ""}
+                onChange={(e) => {
+                  const updatedSale = { ...selectedSale, "PREVISION CHANTIER": e.target.value };
+                  setSelectedSale(updatedSale);
+                  // Optionnel : Mettre à jour les ventes dans l'état
+                  setSales((prevSales) =>
+                    prevSales.map((s) =>
+                      s._id === updatedSale._id ? updatedSale : s
+                    )
+                  );
+                }}
+                className="w-full p-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+
+            {/* Bouton de Sauvegarde */}
+            <div className="mb-6">
+              <button
+                onClick={handleSaveSale}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+              >
+                Sauvegarder
+              </button>
             </div>
 
             {/* Progression des Paiements */}

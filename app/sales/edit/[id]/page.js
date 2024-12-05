@@ -149,7 +149,10 @@ const EditSale = () => {
     prenom: "",
     TE: "",
     "ADRESSE DU CLIENT": "",
-    "CODE INTERP etage": "",
+    "BATIMENT": "", // Nouveau champ pour le bâtiment
+    "CODE": "", // Nouveau champ pour le code
+    "ETAGE": "", // Nouveau champ pour l'étage
+    // "CODE INTERP etage": "", // Retiré ou conservé en fonction de vos besoins
     VILLE: "",
     CP: "",
     TELEPHONE: "",
@@ -290,6 +293,43 @@ const EditSale = () => {
                       name="MONTANT HT"
                       value={value || ""}
                       readOnly
+                    />
+                  </div>
+                );
+              }
+
+              // Champs séparés pour "BATIMENT", "CODE" et "ETAGE"
+              if (key === "BATIMENT" || key === "CODE" || key === "ETAGE") {
+                return (
+                  <div className="mb-4" key={key}>
+                    <label className="block text-gray-800 font-semibold mb-2">
+                      {key === "BATIMENT"
+                        ? "Bâtiment"
+                        : key === "CODE"
+                        ? "Code"
+                        : "Étage"}
+                    </label>
+                    <input
+                      className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
+                      type={
+                        key === "ETAGE"
+                          ? "number"
+                          : key === "CODE"
+                          ? "text"
+                          : "text"
+                      }
+                      name={key}
+                      value={value || ""}
+                      onChange={handleInputChange}
+                      placeholder={
+                        key === "ETAGE"
+                          ? "Étage"
+                          : key === "CODE"
+                          ? "Code"
+                          : "Bâtiment"
+                      }
+                      step={key === "ETAGE" ? "1" : undefined}
+                      min={key === "ETAGE" ? "0" : undefined}
                     />
                   </div>
                 );
