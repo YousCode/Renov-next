@@ -20,14 +20,14 @@ const venteSchema = new mongoose.Schema({
   "MONTANT HT": { type: Number },
   "MONTANT ANNULE": { type: Number },
   "CA MENSUEL": { type: Number },
-  "ETAT": {
-    type: String,
-  
-  },
+  "ETAT": { type: String },
+  "Barème COM": { type: Number }, 
+  "Montant commissions en €": { type: Number }, 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
 
+// Middleware `pre` pour valider et transformer `NUMERO BC`
 venteSchema.pre('save', function(next) {
   if (this.isModified('NUMERO BC')) {
     const numeroBC = this['NUMERO BC'].toString();
@@ -35,6 +35,18 @@ venteSchema.pre('save', function(next) {
     if (!/^\d{6}$/.test(this['NUMERO BC'])) {
       return next(new Error('NUMERO BC doit être au format numérique à 6 chiffres'));
     }
+  }
+  next();
+});
+
+// Middleware pour calculer automatiquement `Montant commissions en €`
+venteSchema.pre('save', function(next) {
+  if (this.isModified('Barème COM') || this.isModified('MONTANT HT')) {
+    const baremeCOM = this["Barème COM"] || 0; 
+    const montantHT = this["MONTANT HT"] || 0; 
+
+    // Calcul de la commission en fonction du barème et du montant HT
+    this["Montant commissions en €"] = (baremeCOM / 100) * montantHT;
   }
   next();
 });

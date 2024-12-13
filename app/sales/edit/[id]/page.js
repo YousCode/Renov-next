@@ -4,16 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSave, faFile } from "@fortawesome/free-solid-svg-icons";
-
-const normalizeString = (str) => {
-  return str
-    ? str
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-    : "";
-};
+import { faSave, faFile, faCopy, faDownload } from "@fortawesome/free-solid-svg-icons";
 
 const TVA_RATE_DEFAULT = 20; // Taux de TVA par défaut en pourcentage
 
@@ -63,12 +54,10 @@ const EditSale = () => {
       if (name === "MONTANT TTC" || name === "TAUX TVA") {
         const montantTTC = parseFloat(updatedSale["MONTANT TTC"]) || 0;
         let tauxTVA = parseFloat(updatedSale["TAUX TVA"]) || TVA_RATE_DEFAULT;
-        // Si le taux TVA est supérieur à 1, on considère qu'il est exprimé en pourcentage
         if (tauxTVA > 1) {
           tauxTVA = tauxTVA / 100;
         }
 
-        // Calculer le montant HT
         const montantHT = montantTTC / (1 + tauxTVA);
         updatedSale["MONTANT HT"] = montantHT > 0 ? montantHT.toFixed(2) : "0.00";
       }
@@ -142,6 +131,35 @@ const EditSale = () => {
     );
   if (!sale) return null;
 
+  // Champs à exclure du CSV
+  const excludedFields = ["_id", "createdAt", "updatedAt", "__v"];
+
+  // Fonction pour copier les données au format CSV
+  const handleCopyCSV = () => {
+    const entries = Object.entries(sale).filter(([key]) => !excludedFields.includes(key));
+    // Générer une seule ligne CSV avec ; comme séparateur
+    const line = entries.map(([key, val]) => val || "").join(";");
+    navigator.clipboard.writeText(line)
+      .then(()=>setNotification({type:"success",message:"Ligne CSV copiée dans le presse-papiers !"}))
+      .catch(()=>setNotification({type:"error",message:"Erreur lors de la copie."}));
+  };
+
+  // Fonction pour télécharger les données au format CSV
+  const handleDownloadCSV = () => {
+    const entries = Object.entries(sale).filter(([key]) => !excludedFields.includes(key));
+    const headers = entries.map(([key]) => key).join(";");
+    const values = entries.map(([key,val])=> val||"").join(";");
+    const csv = headers + "\n" + values;
+    const blob = new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url = URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=`vente_${id}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const defaultSale = {
     "DATE DE VENTE": saleDate ? new Date(saleDate).toISOString().split("T")[0] : "",
     CIVILITE: "",
@@ -149,21 +167,19 @@ const EditSale = () => {
     prenom: "",
     TE: "",
     "ADRESSE DU CLIENT": "",
-    "BATIMENT": "", // Nouveau champ pour le bâtiment
-    "CODE": "", // Nouveau champ pour le code
-    "ETAGE": "", // Nouveau champ pour l'étage
-    // "CODE INTERP etage": "", // Retiré ou conservé en fonction de vos besoins
+    "BATIMENT": "",
+    "CODE": "",
+    "ETAGE": "",
     VILLE: "",
     CP: "",
     TELEPHONE: "",
     VENDEUR: "",
     DESIGNATION: "",
-    "TAUX TVA": "5.5", // Valeur par défaut
+    "TAUX TVA": "5.5",
     "MONTANT HT": "",
     "MONTANT TTC": "",
     "MONTANT ANNULE": "",
     "ETAT": "",
-    // Ajoutez d'autres champs si nécessaire
   };
 
   const currentSale = { ...defaultSale, ...sale };
@@ -175,7 +191,6 @@ const EditSale = () => {
         <h2 className="text-3xl text-white font-bold mb-6 text-center animate-fade-in">
           Compléter la vente
         </h2>
-        {/* Affichage des notifications */}
         {notification && (
           <div
             className={`p-4 rounded-md mb-6 ${
@@ -202,7 +217,6 @@ const EditSale = () => {
                 return null;
               }
 
-              // Champ pour "ETAT"
               if (key === "ETAT") {
                 return (
                   <div className="mb-4 col-span-2" key={key}>
@@ -224,7 +238,6 @@ const EditSale = () => {
                 );
               }
 
-              // Champ pour "TAUX TVA" avec liste déroulante et option personnalisée
               if (key === "TAUX TVA") {
                 return (
                   <div className="mb-4" key={key}>
@@ -232,7 +245,7 @@ const EditSale = () => {
                       {key.replace(/_/g, " ")}
                     </label>
                     <select
-                      className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
+                      className="border border-gray-300 p-2 rounded-md w-full"
                       name="TAUX TVA"
                       value={value || ""}
                       onChange={(e) => {
@@ -246,7 +259,7 @@ const EditSale = () => {
                     </select>
                     {showCustomTVA && (
                       <input
-                        className="border border-gray-300 p-2 rounded-md w-full mt-2 focus:ring-2 focus:ring-blue-500 transition duration-300 animate-fade-in"
+                        className="border border-gray-300 p-2 rounded-md w-full mt-2"
                         type="number"
                         name="TAUX TVA"
                         value={value || ""}
@@ -260,7 +273,6 @@ const EditSale = () => {
                 );
               }
 
-              // Champ pour "MONTANT TTC" en modifiable et "MONTANT HT" en lecture seule
               if (key === "MONTANT TTC") {
                 return (
                   <div className="mb-4" key={key}>
@@ -268,7 +280,7 @@ const EditSale = () => {
                       {key.replace(/_/g, " ")}
                     </label>
                     <input
-                      className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
+                      className="border border-gray-300 p-2 rounded-md w-full"
                       type="number"
                       name="MONTANT TTC"
                       value={value || ""}
@@ -298,87 +310,66 @@ const EditSale = () => {
                 );
               }
 
-              // Champs séparés pour "BATIMENT", "CODE" et "ETAGE"
-              if (key === "BATIMENT" || key === "CODE" || key === "ETAGE") {
-                return (
-                  <div className="mb-4" key={key}>
-                    <label className="block text-gray-800 font-semibold mb-2">
-                      {key === "BATIMENT"
-                        ? "Bâtiment"
-                        : key === "CODE"
-                        ? "Code"
-                        : "Étage"}
-                    </label>
-                    <input
-                      className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
-                      type={
-                        key === "ETAGE"
-                          ? "number"
-                          : key === "CODE"
-                          ? "text"
-                          : "text"
-                      }
-                      name={key}
-                      value={value || ""}
-                      onChange={handleInputChange}
-                      placeholder={
-                        key === "ETAGE"
-                          ? "Étage"
-                          : key === "CODE"
-                          ? "Code"
-                          : "Bâtiment"
-                      }
-                      step={key === "ETAGE" ? "1" : undefined}
-                      min={key === "ETAGE" ? "0" : undefined}
-                    />
-                  </div>
-                );
-              }
-
-              // Autres champs
               return (
                 <div className="mb-4" key={key}>
                   <label className="block text-gray-800 font-semibold mb-2">
                     {key.replace(/_/g, " ")}
                   </label>
                   <input
-                    className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
+                    className="border border-gray-300 p-2 rounded-md w-full"
                     type={key === "DATE DE VENTE" ? "date" : "text"}
                     name={key}
                     value={value || ""}
                     onChange={handleInputChange}
-                    required={["NOM DU CLIENT", "prenom", "ADRESSE DU CLIENT"].includes(key)} // Définir les champs obligatoires
+                    required={["NOM DU CLIENT", "prenom", "ADRESSE DU CLIENT"].includes(key)}
                   />
                 </div>
               );
             })}
           </div>
 
-          {/* Ajout d'un espace pour les notes ou autres champs si nécessaire */}
-          {/* <div className="mb-4">
-            <label className="block text-gray-800 font-semibold mb-2">Notes</label>
-            <textarea
-              className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
-              name="notes"
-              value={sale.notes || ""}
-              onChange={handleInputChange}
-              placeholder="Ajouter des notes"
-            ></textarea>
-          </div> */}
-
-          <div className="flex justify-center space-x-4 mt-6">
+          <div className="flex flex-wrap justify-center gap-4 mt-6">
             <button
-              className="bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transform transition duration-300 hover:scale-105"
+              className="bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600"
               type="submit"
             >
               <FontAwesomeIcon icon={faSave} /> Valider
             </button>
             <button
               onClick={() => handleFileAction(id)}
-              className="bg-gray-500 text-white py-2 px-6 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 transform transition duration-300 hover:scale-105"
+              className="bg-gray-500 text-white py-2 px-6 rounded-md hover:bg-gray-600"
               type="button"
             >
               <FontAwesomeIcon icon={faFile} /> Fichier
+            </button>
+            <button
+              onClick={handleCopyCSV}
+              className="bg-purple-500 text-white py-2 px-6 rounded-md hover:bg-purple-600"
+              type="button"
+              title="Copier la vente en CSV"
+            >
+              <FontAwesomeIcon icon={faCopy} /> Copier CSV
+            </button>
+            <button
+              onClick={()=>{
+                const entries = Object.entries(sale).filter(([k])=>!excludedFields.includes(k));
+                const headers = entries.map(([k])=>k).join(";");
+                const values = entries.map(([k,v])=>v||"").join(";");
+                const csv = headers+"\n"+values;
+                const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+                const url=URL.createObjectURL(blob);
+                const a=document.createElement('a');
+                a.href=url;
+                a.download=`vente_${id}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+              }}
+              className="bg-green-500 text-white py-2 px-6 rounded-md hover:bg-green-600"
+              type="button"
+              title="Télécharger la vente au format CSV"
+            >
+              <FontAwesomeIcon icon={faDownload} /> Télécharger CSV
             </button>
           </div>
         </form>
