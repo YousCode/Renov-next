@@ -16,6 +16,9 @@ import {
 import Confetti from "react-confetti";
 import useWindowSize from "react-use/lib/useWindowSize";
 
+// =============================
+// Fonctions utilitaires
+// =============================
 const normalizeString = (str) => {
   return str
     ? str
@@ -55,7 +58,9 @@ const isExcludedState = (etat) => {
   return dvRegex.test(etat) || numberRegex.test(etat);
 };
 
+// Fonction pour calculer la commission selon le barème
 function calculateCommission(sale) {
+  // On suppose que le "CA HT (€)" = "MONTANT HT"
   const caHT = parseFloat(sale["MONTANT HT"]) || 0;
   let percent = 0.10; // T5 par défaut (10%)
   switch (sale["BAREME COM"]) {
@@ -70,14 +75,15 @@ function calculateCommission(sale) {
   return (caHT * percent).toFixed(2);
 }
 
+// Fonction pour obtenir la classe de background selon le barème
 function getBaremeBgColor(bareme) {
   switch (bareme) {
-    case "T1": return "bg-green-300";
-    case "T2": return "bg-blue-300";
-    case "T3": return "bg-purple-300";
-    case "T4": return "bg-yellow-300";
-    case "T5": return "";
-    case "T6": return "bg-red-300";
+    case "T1": return "bg-green-300";    // 20%
+    case "T2": return "bg-blue-300";     // 17%
+    case "T3": return "bg-purple-300";   // 15%
+    case "T4": return "bg-yellow-300";   // 12%
+    case "T5": return "";                // 10% pas de bg
+    case "T6": return "bg-red-300";      // 6%
     default: return "";
   }
 }
@@ -98,10 +104,13 @@ const processSalesData = (salesData) => {
       let montantTTC = parseFloat(sale["MONTANT TTC"]);
       let tauxTVA = parseFloat(sale["TAUX TVA"]) || 5.5; // Valeur par défaut
 
+      // Si le taux de TVA est supérieur à 1, on considère que c'est 5.5 ou 10.0
       if (tauxTVA !== 5.5 && tauxTVA !== 10) {
+        // Par défaut 5.5 si non conforme
         tauxTVA = 5.5;
       }
 
+      // Recalcul TTC/HT si nécessaire
       const tvaRate = (tauxTVA === 10) ? 0.10 : 0.055;
       if (isNaN(montantTTC) && !isNaN(montantHT)) {
         montantTTC = montantHT * (1 + tvaRate);
@@ -116,16 +125,19 @@ const processSalesData = (salesData) => {
         sale["MONTANT TTC"] = "0.00";
       }
 
+      // Assurer que "TAUX TVA" est en "5,5%" ou "10,0%"
       sale["TAUX TVA"] = (tauxTVA === 10) ? "10,0%" : "5,5%";
 
       if (!sale["PREVISION CHANTIER"]) {
         sale["PREVISION CHANTIER"] = null;
       }
 
+      // En vue mensuelle, on a un BAREME COM (si pas présent, T5 par défaut)
       if (!sale["BAREME COM"]) {
         sale["BAREME COM"] = "T5";
       }
 
+      // Calcul de la commission selon le barème
       sale["MONTANT COMMISSIONS"] = calculateCommission(sale);
 
       uniqueSales.push(sale);
@@ -346,7 +358,7 @@ const AllSales = () => {
 
   const calculateSaleProgress = (sale) => {
     const totalPaid = (sale.payments || []).reduce(
-      (sum, payment) => sum + parseFloat(payment.montant),
+      (sum, payment) => sum + parseFloat(p.montant),
       0
     );
     const totalAmount =
@@ -450,7 +462,7 @@ Prévision Chantier: ${
     }
   };
 
-  // Nouvelle fonction pour copier en CSV
+  // Fonction pour copier les ventes affichées en CSV
   const handleCopyCSV = () => {
     if (displayedSales.length === 0) {
       alert("Aucune vente à copier.");
@@ -470,7 +482,7 @@ Prévision Chantier: ${
       .catch(() => alert("Erreur lors de la copie du CSV."));
   };
 
-  // Nouvelle fonction pour télécharger le CSV
+  // Fonction pour télécharger les ventes affichées en CSV
   const handleDownloadCSV = () => {
     if (displayedSales.length === 0) {
       alert("Aucune vente à télécharger.");
@@ -495,8 +507,18 @@ Prévision Chantier: ${
   };
 
   const months = [
-    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+    "Janvier",
+    "Février",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Août",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Décembre",
   ];
 
   return (
@@ -515,7 +537,6 @@ Prévision Chantier: ${
           {showAllSales ? "Afficher les ventes mensuelles" : "Afficher toutes les ventes"}
         </button>
 
-        {/* Ajout des boutons Copie CSV et Téléchargement CSV */}
         <div className="flex flex-col md:flex-row items-center justify-center w-full mb-2 space-y-2 md:space-y-0">
           <input
             type="text"
@@ -549,6 +570,7 @@ Prévision Chantier: ${
             <option value="desc">Desc</option>
           </select>
 
+          {/* Boutons Copier CSV et Télécharger CSV */}
           <button
             onClick={handleCopyCSV}
             className="px-2 py-1 bg-purple-500 text-white rounded-lg text-xs"
@@ -566,12 +588,7 @@ Prévision Chantier: ${
         </div>
       </div>
 
-      {/* Le reste du code (tableau, pagination, modal, footer) reste inchangé */}
-      {/* ... */}
       <div className="w-full overflow-x-auto mb-16">
-        {/* Tableau inchangé */}
-        {/* ... Collez ici votre tableau actuel ... */}
-        {/* Le code du tableau est déjà présent dans votre version précédente, on le laisse tel quel */}
         <table ref={tableRef} className="min-w-full bg-white text-gray-800 text-xs">
           <thead className="bg-gray-700 text-white">
             {showAllSales ? (
@@ -688,22 +705,338 @@ Prévision Chantier: ${
                     </>
                   ) : (
                     <>
-                      {/* ... Votre code mensuel inchangé ... */}
-                      {/* On ne répète pas pour la brièveté, ce code reste identique à votre version */}
-                      {/* ... */}
+                      {/* Mode mensuel inchangé */}
+                      <td className="border px-2 py-1 relative">
+                        {formatDate(sale["DATE DE VENTE"])}
+                        <div className="absolute bottom-0 left-0 w-full mt-1">
+                          <div className="w-full bg-gray-300 rounded-full h-2">
+                            <div
+                              className="bg-green-500 h-2 rounded-full"
+                              style={{ width: `${rowProgress}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="border px-2 py-1">{sale["NOM DU CLIENT"]}</td>
+                      <td className="border px-2 py-1">{sale["VENDEUR"] || "Inconnu"}</td>
+                      <td className="border px-2 py-1">{sale["BC"] || ""}</td>
+                      <td className="border px-2 py-1">{sale["DESIGNATION"] || "N/A"}</td>
+                      <td className="border px-2 py-1 text-right">{formatNumber(sale["MONTANT TTC"])}</td>
+                      <td className="border px-2 py-1">{sale["TAUX TVA"] || "N/A"}</td>
+                      <td className="border px-2 py-1 text-right">{formatNumber(sale["MONTANT HT"])}</td>
+                      <td className={`border px-2 py-1 ${getBaremeBgColor(sale["BAREME COM"])}`}>
+                        <select
+                          value={sale["BAREME COM"]}
+                          onChange={(e)=>{
+                            const newBareme=e.target.value;
+                            const updatedSale={...sale,"BAREME COM":newBareme};
+                            updatedSale["MONTANT COMMISSIONS"]=calculateCommission(updatedSale);
+                            setSales(prev=>prev.map(s=>s._id===sale._id?updatedSale:s));
+                          }}
+                          className="p-1 border border-gray-300 rounded text-xs"
+                        >
+                          <option value="T1">T1 (20%)</option>
+                          <option value="T2">T2 (17%)</option>
+                          <option value="T3">T3 (15%)</option>
+                          <option value="T4">T4 (12%)</option>
+                          <option value="T5">T5 (10%)</option>
+                          <option value="T6">T6 (6%)</option>
+                        </select>
+                      </td>
+                      <td className="border px-2 py-1 text-right">
+                        {sale["MONTANT COMMISSIONS"] ? formatNumber(sale["MONTANT COMMISSIONS"]) : "-"}
+                      </td>
+                      <td className="border px-2 py-1 flex justify-center space-x-1">
+                        <button
+                          onClick={() => router.push(`/sales/edit/${sale._id}`)}
+                          className="px-2 py-1 bg-blue-500 text-white rounded-lg text-xs"
+                          title="Modifier la vente"
+                        >
+                          <FontAwesomeIcon icon={faEdit} />
+                        </button>
+                        <button
+                          onClick={() => router.push(`/file/details/${sale._id}`)}
+                          className="px-2 py-1 bg-green-500 text-white rounded-lg text-xs"
+                          title="Voir les détails du fichier"
+                        >
+                          <FontAwesomeIcon icon={faFile} />
+                        </button>
+                        <button
+                          onClick={() => handleRowDoubleClick(sale)}
+                          className="px-2 py-1 bg-yellow-500 text-white rounded-lg text-xs"
+                          title="Gérer les paiements"
+                        >
+                          <FontAwesomeIcon icon={faMoneyBillWave} />
+                        </button>
+                        <button
+                          onClick={() => handleCopySale(sale)}
+                          className="px-2 py-1 bg-purple-500 text-white rounded-lg text-xs"
+                          title="Copier la vente"
+                        >
+                          <FontAwesomeIcon icon={faCopy} />
+                        </button>
+                        <button
+                          onClick={() => handleHideSale(sale)}
+                          className="px-2 py-1 bg-red-500 text-white rounded-lg text-xs"
+                          title="Cacher la vente"
+                        >
+                          <FontAwesomeIcon icon={faTrash} />
+                        </button>
+                      </td>
                     </>
                   )}
                 </tr>
               );
             })}
 
-            {/* Ligne Totaux inchangée */}
+            {showAllSales ? (
+              <tr
+                className="bg-gray-200 font-bold cursor-pointer"
+                onMouseEnter={handleTotalMouseEnter}
+                onMouseLeave={handleTotalMouseLeave}
+              >
+                <td colSpan="7" className="border px-2 py-1 text-right">Totaux :</td>
+                <td className="border px-2 py-1 text-right">{formatNumber(calculateTotalTTC())}</td>
+                <td className="border px-2 py-1 text-right">{formatNumber(calculateTotalHT())}</td>
+                <td className="border px-2 py-1"></td>
+                <td className="border px-2 py-1"></td>
+                <td className="border px-2 py-1"></td>
+              </tr>
+            ) : (
+              <tr
+                className="bg-gray-200 font-bold cursor-pointer"
+                onMouseEnter={handleTotalMouseEnter}
+                onMouseLeave={handleTotalMouseLeave}
+              >
+                <td colSpan="5" className="border px-2 py-1 text-right">Totaux :</td>
+                <td className="border px-2 py-1 text-right">{formatNumber(calculateTotalTTC())}</td>
+                <td className="border px-2 py-1"></td>
+                <td className="border px-2 py-1 text-right">{formatNumber(calculateTotalHT())}</td>
+                <td className="border px-2 py-1"></td>
+                <td className="border px-2 py-1"></td>
+                <td className="border px-2 py-1"></td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* Pagination inchangée, Modal inchangé, Footer inchangé */}
-      {/* ... Votre code pagination, modal, footer reste inchangé ... */}
+      <div className="flex justify-center items-center space-x-2 mt-4">
+        <button
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+          className="px-2 py-1 bg-gray-500 text-white rounded-lg disabled:opacity-50 text-xs"
+        >
+          Précédent
+        </button>
+        <span className="text-white text-xs">
+          Page {currentPage} sur {totalPages}
+        </span>
+        <button
+          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+          disabled={currentPage === totalPages}
+          className="px-2 py-1 bg-gray-500 text-white rounded-lg disabled:opacity-50 text-xs"
+        >
+          Suivant
+        </button>
+      </div>
+
+      {showConfetti && <Confetti width={width} height={height} />}
+
+      {isModalOpen && selectedSale && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-white w-11/12 md:w-2/3 lg:w-1/2 p-6 rounded-lg overflow-y-auto max-h-screen">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-xs md:text-xs">
+                Paiements pour {selectedSale["NOM DU CLIENT"]}
+              </h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-600 hover:text-gray-800 text-xs md:text-xs"
+              >
+                <FontAwesomeIcon icon={faTimes} size="lg" />
+              </button>
+            </div>
+            <div className="mb-6 border-b pb-4">
+              <h3 className="text-xl font-semibold mb-2 text-xs md:text-xs">Aperçu de la Vente</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p><span className="font-bold">Date de Vente:</span> {formatDate(selectedSale["DATE DE VENTE"])}</p>
+                  <p><span className="font-bold">Nom du Client:</span> {selectedSale["NOM DU CLIENT"]}</p>
+                  <p><span className="font-bold">Téléphone:</span> {selectedSale.TELEPHONE}</p>
+                  <p><span className="font-bold">Adresse:</span> {selectedSale["ADRESSE DU CLIENT"] || "Adresse manquante"}</p>
+                </div>
+                <div>
+                  <p><span className="font-bold">Ville:</span> {selectedSale.VILLE || "Ville manquante"}</p>
+                  <p><span className="font-bold">Vendeur:</span> {selectedSale["VENDEUR"] || "Vendeur inconnu"}</p>
+                  <p><span className="font-bold">Désignation:</span> {selectedSale["DESIGNATION"] || "Désignation manquante"}</p>
+                  <p><span className="font-bold">État:</span> {selectedSale.ETAT || "État inconnu"}</p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <p><span className="font-bold">Montant TTC:</span> {formatNumber(selectedSale["MONTANT TTC"])}</p>
+                <p><span className="font-bold">Montant HT:</span> {formatNumber(selectedSale["MONTANT HT"])}</p>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="font-bold mb-2 text-xs md:text-xs">Prévision Chantier :</h3>
+              <input
+                type="date"
+                value={selectedSale["PREVISION CHANTIER"] || ""}
+                onChange={(e) => {
+                  const updatedSale = { ...selectedSale, "PREVISION CHANTIER": e.target.value };
+                  setSelectedSale(updatedSale);
+                  setSales((prevSales) =>
+                    prevSales.map((s) => (s._id === updatedSale._id ? updatedSale : s))
+                  );
+                }}
+                className="w-full p-2 border border-gray-300 rounded-lg text-xs md:text-xs"
+              />
+            </div>
+
+            <div className="mb-6">
+              <button
+                onClick={handleSaveSale}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg text-xs md:text-xs"
+              >
+                Sauvegarder
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="font-bold mb-2 text-xs md:text-xs">Progression des Paiements :</h3>
+              <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
+                <div
+                  className="bg-green-500 h-4 rounded-full"
+                  style={{ width: `${calculateProgress()}%` }}
+                ></div>
+              </div>
+              <p className="text-xs md:text-xs">
+                <span className="font-bold">Montant total :</span>{" "}
+                {formatNumber(
+                  parseFloat(selectedSale["MONTANT TTC"]) ||
+                    parseFloat(selectedSale["MONTANT HT"]) ||
+                    0
+                )}
+              </p>
+              <p className="text-xs md:text-xs">
+                <span className="font-bold">Montant payé :</span>{" "}
+                {formatNumber(calculateTotalPaid())}
+              </p>
+              <p className="text-xs md:text-xs">
+                <span className="font-bold">Montant restant :</span>{" "}
+                {formatNumber(
+                  (parseFloat(selectedSale["MONTANT TTC"]) ||
+                    parseFloat(selectedSale["MONTANT HT"]) ||
+                    0) - calculateTotalPaid()
+                )}
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="font-bold mb-2 text-xs md:text-xs">Historique des paiements :</h3>
+              {payments.length > 0 ? (
+                <ul className="list-disc list-inside text-xs md:text-xs">
+                  {payments.map((payment) => (
+                    <li key={payment.id} className="mb-2">
+                      <span className="font-medium">{formatDate(payment.date)}</span> - {formatNumber(payment.montant)}
+                      {payment.comment && (
+                        <p className="text-sm text-gray-600">Commentaire : {payment.comment}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs md:text-xs">Aucun paiement enregistré.</p>
+              )}
+            </div>
+
+            <div className="mb-6">
+              <h3 className="font-bold mb-2 text-xs md:text-xs">Ajouter un paiement :</h3>
+              <div className="flex flex-col space-y-2">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={newPaymentAmount}
+                  onChange={(e) => setNewPaymentAmount(e.target.value)}
+                  placeholder="Montant"
+                  className="p-2 border border-gray-300 rounded-lg text-xs md:text-xs"
+                />
+                <input
+                  type="date"
+                  value={newPaymentDate}
+                  onChange={(e) => setNewPaymentDate(e.target.value)}
+                  className="p-2 border border-gray-300 rounded-lg text-xs md:text-xs"
+                />
+                <textarea
+                  value={newPaymentComment}
+                  onChange={(e) => setNewPaymentComment(e.target.value)}
+                  placeholder="Commentaire"
+                  className="p-2 border border-gray-300 rounded-lg text-xs md:text-xs"
+                ></textarea>
+                <div className="flex items-center">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="p-2 text-xs md:text-xs"
+                  />
+                  {ocrLoading && (
+                    <span className="ml-2 text-gray-600 text-xs md:text-xs">
+                      Analyse en cours...
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleAddPayment}
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg text-xs md:text-xs"
+                >
+                  Ajouter le paiement
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!showAllSales && (
+        <footer className="fixed bottom-0 left-0 w-full bg-gray-700 text-white py-4 flex flex-col md:flex-row justify-between items-center px-4">
+          <div className="flex space-x-2 overflow-x-auto mb-2 md:mb-0">
+            {months.map((month, index) => (
+              <button
+                key={index}
+                onClick={() => {setSelectedMonth(index); setCurrentPage(1);}}
+                className={`px-2 py-1 rounded-lg whitespace-nowrap text-xs md:text-xs ${
+                  selectedMonth === index ? "bg-blue-500" : "bg-gray-600"
+                }`}
+              >
+                {month}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center space-x-2">
+            <label htmlFor="year" className="mr-2 text-xs md:text-xs">
+              Année :
+            </label>
+            <select
+              id="year"
+              value={selectedYear}
+              onChange={(e) => {setSelectedYear(Number(e.target.value)); setCurrentPage(1);}}
+              className="p-1 bg-gray-600 rounded-lg text-white text-xs md:text-xs"
+            >
+              {Array.from({ length: 10 }, (_, i) => {
+                const year = new Date().getFullYear() - i;
+                return (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        </footer>
+      )}
 
       <style jsx>{`
         @keyframes blink {
