@@ -177,16 +177,7 @@ const Test = () => {
                   />
                   <ErrorMessage name="NUMERO BC" component="div" className="text-red-500 text-sm" />
                 </div>
-                {/* TE */}
-                <div>
-                  <label className="block text-gray-700">TE:</label>
-                  <Field
-                    type="text"
-                    name="TE"
-                    className="mt-1 p-2 w-full border rounded"
-                  />
-                  <ErrorMessage name="TE" component="div" className="text-red-500 text-sm" />
-                </div>
+               
                 {/* Adresse du Client */}
                 <div>
                   <label className="block text-gray-700">Adresse du Client:</label>
