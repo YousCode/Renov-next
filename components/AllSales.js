@@ -387,7 +387,7 @@ Nom du Client: ${sale["NOM DU CLIENT"] || ""}
 Prénom: ${sale["prenom"] || ""}
 Numéro: ${sale["NUMERO BC"] || ""}
 Adresse du Client: ${sale["ADRESSE DU CLIENT"] || ""}
-Code: ${sale["CODE"] || ""}
+CODE INTERP etage: ${sale["CODE INTERP etage"] || ""}
 Ville: ${sale["VILLE"] || ""}
 CP: ${sale["CP"] || ""}
 Téléphone: ${sale["TELEPHONE"] || ""}
@@ -482,7 +482,7 @@ Observation: ${sale["OBSERVATION"] || ""}
       "prenom",
       "NUMERO BC",
       "ADRESSE DU CLIENT",
-      "CODE",
+      "CODE INTERP etage",
       "VILLE",
       "CP",
       "TELEPHONE",
@@ -519,7 +519,7 @@ Observation: ${sale["OBSERVATION"] || ""}
       "prenom",
       "NUMERO BC",
       "ADRESSE DU CLIENT",
-      "CODE",
+      "CODE INTERP etage",
       "VILLE",
       "CP",
       "TELEPHONE",
@@ -644,7 +644,7 @@ Observation: ${sale["OBSERVATION"] || ""}
                 <th>prenom</th>
                 <th>BC</th>
                 <th>ADRESSE DU CLIENT</th>
-                <th>CODE</th>
+                <th>CODE INTERP etage</th>
                 <th>VILLE</th>
                 <th>CP</th>
                 <th>TELEPHONE</th>
@@ -717,7 +717,7 @@ Observation: ${sale["OBSERVATION"] || ""}
                       <td className="border px-1 py-1">
                         {sale["ADRESSE DU CLIENT"] || ""}
                       </td>
-                      <td className="border px-1 py-1">{sale["CODE"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["CODE INTERP etage"] || ""}</td>
                       <td className="border px-1 py-1">
                         {sale["VILLE"] || ""}
                       </td>
