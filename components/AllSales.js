@@ -57,28 +57,48 @@ const isExcludedState = (etat) => {
 
 function calculateCommission(sale) {
   const caHT = parseFloat(sale["MONTANT HT"]) || 0;
-  let percent = 0.10;
+  let percent = 0.1;
   switch (sale["BAREME COM"]) {
-    case "T1": percent = 0.20; break;
-    case "T2": percent = 0.17; break;
-    case "T3": percent = 0.15; break;
-    case "T4": percent = 0.12; break;
-    case "T5": percent = 0.10; break;
-    case "T6": percent = 0.06; break;
-    default: percent = 0.10;
+    case "T1":
+      percent = 0.2;
+      break;
+    case "T2":
+      percent = 0.17;
+      break;
+    case "T3":
+      percent = 0.15;
+      break;
+    case "T4":
+      percent = 0.12;
+      break;
+    case "T5":
+      percent = 0.1;
+      break;
+    case "T6":
+      percent = 0.06;
+      break;
+    default:
+      percent = 0.1;
   }
   return (caHT * percent).toFixed(2);
 }
 
 function getBaremeBgColor(bareme) {
   switch (bareme) {
-    case "T1": return "bg-green-300";
-    case "T2": return "bg-blue-300";
-    case "T3": return "bg-purple-300";
-    case "T4": return "bg-yellow-300";
-    case "T5": return "";
-    case "T6": return "bg-red-300";
-    default: return "";
+    case "T1":
+      return "bg-green-300";
+    case "T2":
+      return "bg-blue-300";
+    case "T3":
+      return "bg-purple-300";
+    case "T4":
+      return "bg-yellow-300";
+    case "T5":
+      return "";
+    case "T6":
+      return "bg-red-300";
+    default:
+      return "";
   }
 }
 
@@ -102,7 +122,7 @@ const processSalesData = (salesData) => {
         tauxTVA = 5.5;
       }
 
-      const tvaRate = (tauxTVA === 10) ? 0.10 : 0.055;
+      const tvaRate = tauxTVA === 10 ? 0.1 : 0.055;
       if (isNaN(montantTTC) && !isNaN(montantHT)) {
         montantTTC = montantHT * (1 + tvaRate);
         sale["MONTANT TTC"] = montantTTC.toFixed(2);
@@ -116,7 +136,7 @@ const processSalesData = (salesData) => {
         sale["MONTANT TTC"] = "0.00";
       }
 
-      sale["TAUX TVA"] = (tauxTVA === 10) ? "10,0%" : "5,5%";
+      sale["TAUX TVA"] = tauxTVA === 10 ? "10,0%" : "5,5%";
 
       if (!sale["PREVISION CHANTIER"]) {
         sale["PREVISION CHANTIER"] = null;
@@ -159,8 +179,8 @@ const AllSales = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [hiddenSales, setHiddenSales] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('hiddenSales');
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("hiddenSales");
       return stored ? JSON.parse(stored) : [];
     }
     return [];
@@ -179,7 +199,9 @@ const AllSales = () => {
       setLoading(true);
       const response = await fetch("/api/ventes");
       if (!response.ok) {
-        throw new Error(`Échec de la récupération des ventes : ${response.statusText}`);
+        throw new Error(
+          `Échec de la récupération des ventes : ${response.statusText}`
+        );
       }
       const data = await response.json();
       const processedSales = processSalesData(data.data);
@@ -199,7 +221,8 @@ const AllSales = () => {
       const etat = normalizeString(sale.ETAT || "");
       const dateCondition = showAllSales
         ? true
-        : (saleDate.getMonth() === selectedMonth && saleDate.getFullYear() === selectedYear);
+        : saleDate.getMonth() === selectedMonth &&
+          saleDate.getFullYear() === selectedYear;
 
       return (
         dateCondition &&
@@ -213,7 +236,9 @@ const AllSales = () => {
         (sale) =>
           normalizeString(sale["NOM DU CLIENT"] || "").includes(searchTerm) ||
           normalizeString(sale["TELEPHONE"] || "").includes(searchTerm) ||
-          normalizeString(sale["ADRESSE DU CLIENT"] || "").includes(searchTerm) ||
+          normalizeString(sale["ADRESSE DU CLIENT"] || "").includes(
+            searchTerm
+          ) ||
           normalizeString(sale["VENDEUR"] || "").includes(searchTerm) ||
           normalizeString(sale["DESIGNATION"] || "").includes(searchTerm)
       );
@@ -247,7 +272,17 @@ const AllSales = () => {
   useEffect(() => {
     filterSales(sales);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showAllSales, selectedMonth, selectedYear, sortField, sortOrder, sales, currentPage, searchTerm, hiddenSales]);
+  }, [
+    showAllSales,
+    selectedMonth,
+    selectedYear,
+    sortField,
+    sortOrder,
+    sales,
+    currentPage,
+    searchTerm,
+    hiddenSales,
+  ]);
 
   const handleSearchChange = (e) => {
     const term = normalizeString(e.target.value);
@@ -283,7 +318,9 @@ const AllSales = () => {
     setPayments((prevPayments) => [...prevPayments, newPayment]);
     setSales((prevSales) =>
       prevSales.map((s) =>
-        s._id === selectedSale._id ? { ...s, payments: [...(s.payments || []), newPayment] } : s
+        s._id === selectedSale._id
+          ? { ...s, payments: [...(s.payments || []), newPayment] }
+          : s
       )
     );
 
@@ -297,7 +334,9 @@ const AllSales = () => {
     if (!file) return;
     setOcrLoading(true);
     try {
-      const { data: { text } } = await Tesseract.recognize(file, "fra");
+      const {
+        data: { text },
+      } = await Tesseract.recognize(file, "fra");
       const amount = extractAmountFromText(text);
       if (amount) {
         setNewPaymentAmount(amount);
@@ -321,7 +360,8 @@ const AllSales = () => {
     return null;
   };
 
-  const calculateTotalPaid = () => payments.reduce((sum, payment) => sum + payment.montant, 0);
+  const calculateTotalPaid = () =>
+    payments.reduce((sum, payment) => sum + payment.montant, 0);
 
   const calculateProgress = () => {
     const totalPaid = calculateTotalPaid();
@@ -348,10 +388,13 @@ Désignation: ${sale["DESIGNATION"] || ""}
 Taux TVA: ${sale["TAUX TVA"] || ""}
 Montant TTC: ${formatNumber(sale["MONTANT TTC"])}
 Montant HT: ${formatNumber(sale["MONTANT HT"])}
-Prévision Chantier: ${sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION CHANTIER"]) : ""}
+Prévision Chantier: ${
+      sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION CHANTIER"]) : ""
+    }
 Observation: ${sale["OBSERVATION"] || ""}
     `;
-    navigator.clipboard.writeText(saleData)
+    navigator.clipboard
+      .writeText(saleData)
       .then(() => alert("Vente copiée dans le presse-papiers !"))
       .catch((err) => {
         console.error("Erreur lors de la copie :", err);
@@ -360,13 +403,17 @@ Observation: ${sale["OBSERVATION"] || ""}
   };
 
   const handleHideSale = (sale) => {
-    const confirmation = confirm("Êtes-vous sûr de vouloir cacher cette vente ?");
+    const confirmation = confirm(
+      "Êtes-vous sûr de vouloir cacher cette vente ?"
+    );
     if (!confirmation) return;
     const updatedHiddenSales = [...hiddenSales, sale._id];
     setHiddenSales(updatedHiddenSales);
-    localStorage.setItem('hiddenSales', JSON.stringify(updatedHiddenSales));
+    localStorage.setItem("hiddenSales", JSON.stringify(updatedHiddenSales));
     setSales((prevSales) => prevSales.filter((s) => s._id !== sale._id));
-    setDisplayedSales((prevDisplayedSales) => prevDisplayedSales.filter((s) => s._id !== sale._id));
+    setDisplayedSales((prevDisplayedSales) =>
+      prevDisplayedSales.filter((s) => s._id !== sale._id)
+    );
     alert("Vente cachée avec succès.");
   };
 
@@ -421,16 +468,34 @@ Observation: ${sale["OBSERVATION"] || ""}
       alert("Aucune vente à copier.");
       return;
     }
-    const fields = ["DATE DE VENTE","NOM DU CLIENT","prenom","NUMERO BC","ADRESSE DU CLIENT","CODE","VILLE","CP","TELEPHONE","VENDEUR","DESIGNATION","TAUX TVA","MONTANT TTC","MONTANT HT","PREVISION CHANTIER","OBSERVATION"];
+    const fields = [
+      "DATE DE VENTE",
+      "NOM DU CLIENT",
+      "prenom",
+      "NUMERO BC",
+      "ADRESSE DU CLIENT",
+      "CODE",
+      "VILLE",
+      "CP",
+      "TELEPHONE",
+      "VENDEUR",
+      "DESIGNATION",
+      "TAUX TVA",
+      "MONTANT TTC",
+      "MONTANT HT",
+      "PREVISION CHANTIER",
+      "OBSERVATION",
+    ];
     const lines = [];
     lines.push(fields.join(";"));
     for (const sale of displayedSales) {
-      const values = fields.map(f => sale[f] || "");
+      const values = fields.map((f) => sale[f] || "");
       lines.push(values.join(";"));
     }
 
     const csv = lines.join("\n");
-    navigator.clipboard.writeText(csv)
+    navigator.clipboard
+      .writeText(csv)
       .then(() => alert("CSV des ventes copiées !"))
       .catch(() => alert("Erreur lors de la copie du CSV."));
   };
@@ -440,17 +505,34 @@ Observation: ${sale["OBSERVATION"] || ""}
       alert("Aucune vente à télécharger.");
       return;
     }
-    const fields = ["DATE DE VENTE","NOM DU CLIENT","prenom","NUMERO BC","ADRESSE DU CLIENT","CODE","VILLE","CP","TELEPHONE","VENDEUR","DESIGNATION","TAUX TVA","MONTANT TTC","MONTANT HT","PREVISION CHANTIER","OBSERVATION"];
+    const fields = [
+      "DATE DE VENTE",
+      "NOM DU CLIENT",
+      "prenom",
+      "NUMERO BC",
+      "ADRESSE DU CLIENT",
+      "CODE",
+      "VILLE",
+      "CP",
+      "TELEPHONE",
+      "VENDEUR",
+      "DESIGNATION",
+      "TAUX TVA",
+      "MONTANT TTC",
+      "MONTANT HT",
+      "PREVISION CHANTIER",
+      "OBSERVATION",
+    ];
     const lines = [];
     lines.push(fields.join(";"));
     for (const sale of displayedSales) {
-      const values = fields.map(f => sale[f] || "");
+      const values = fields.map((f) => sale[f] || "");
       lines.push(values.join(";"));
     }
     const csv = lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = "ventes.csv";
     document.body.appendChild(a);
@@ -459,10 +541,22 @@ Observation: ${sale["OBSERVATION"] || ""}
   };
 
   const months = [
-    "Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre",
+    "Janvier",
+    "Février",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Août",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Décembre",
   ];
 
-  if (loading) return <p className="text-center text-gray-700">Chargement...</p>;
+  if (loading)
+    return <p className="text-center text-gray-700">Chargement...</p>;
   if (error) return <p className="text-center text-red-500">{error}</p>;
 
   return (
@@ -530,7 +624,10 @@ Observation: ${sale["OBSERVATION"] || ""}
       </div>
 
       <div className="w-full overflow-x-auto mb-8">
-        <table ref={tableRef} className="min-w-full bg-white text-gray-800 text-[10px]">
+        <table
+          ref={tableRef}
+          className="min-w-full bg-white text-gray-800 text-[10px]"
+        >
           <thead className="bg-gray-700 text-white">
             {showAllSales ? (
               <tr>
@@ -586,7 +683,8 @@ Observation: ${sale["OBSERVATION"] || ""}
                 parseFloat(sale["MONTANT TTC"]) ||
                 parseFloat(sale["MONTANT HT"]) ||
                 0;
-              const rowProgress = totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
+              const rowProgress =
+                totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
 
               return (
                 <tr
@@ -596,22 +694,52 @@ Observation: ${sale["OBSERVATION"] || ""}
                 >
                   {showAllSales ? (
                     <>
-                      <td className="border px-1 py-1">{formatDate(sale["DATE DE VENTE"])}</td>
-                      <td className="border px-1 py-1">{sale["NOM DU CLIENT"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["prenom"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["NUMERO BC"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["ADRESSE DU CLIENT"] || ""}</td>
+                      <td className="border px-1 py-1">
+                        {formatDate(sale["DATE DE VENTE"])}
+                      </td>
+                      <td className="border px-1 py-1">
+                        {sale["NOM DU CLIENT"] || ""}
+                      </td>
+                      <td className="border px-1 py-1">
+                        {sale["prenom"] || ""}
+                      </td>
+                      <td className="border px-1 py-1">
+                        {sale["NUMERO BC"] || ""}
+                      </td>
+                      <td className="border px-1 py-1">
+                        {sale["ADRESSE DU CLIENT"] || ""}
+                      </td>
                       <td className="border px-1 py-1">{sale["CODE"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["VILLE"] || ""}</td>
+                      <td className="border px-1 py-1">
+                        {sale["VILLE"] || ""}
+                      </td>
                       <td className="border px-1 py-1">{sale["CP"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["TELEPHONE"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["VENDEUR"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["DESIGNATION"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["TAUX TVA"] || ""}</td>
-                      <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT TTC"])}</td>
-                      <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT HT"])}</td>
-                      <td className="border px-1 py-1">{sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION CHANTIER"]) : ""}</td>
-                      <td className="border px-1 py-1">{sale["OBSERVATION"] || ""}</td>
+                      <td className="border px-1 py-1">
+                        {sale["TELEPHONE"] || ""}
+                      </td>
+                      <td className="border px-1 py-1">
+                        {sale["VENDEUR"] || ""}
+                      </td>
+                      <td className="border px-1 py-1">
+                        {sale["DESIGNATION"] || ""}
+                      </td>
+                      <td className="border px-1 py-1">
+                        {sale["TAUX TVA"] || ""}
+                      </td>
+                      <td className="border px-1 py-1 text-right">
+                        {formatNumber(sale["MONTANT TTC"])}
+                      </td>
+                      <td className="border px-1 py-1 text-right">
+                        {formatNumber(sale["MONTANT HT"])}
+                      </td>
+                      <td className="border px-1 py-1">
+                        {sale["PREVISION CHANTIER"]
+                          ? formatDate(sale["PREVISION CHANTIER"])
+                          : ""}
+                      </td>
+                      <td className="border px-1 py-1">
+                        {sale["OBSERVATION"] || ""}
+                      </td>
                       <td className="border px-1 py-1 flex justify-center space-x-1">
                         <button
                           onClick={() => router.push(`/sales/edit/${sale._id}`)}
@@ -621,7 +749,9 @@ Observation: ${sale["OBSERVATION"] || ""}
                           <FontAwesomeIcon icon={faEdit} />
                         </button>
                         <button
-                          onClick={() => router.push(`/file/details/${sale._id}`)}
+                          onClick={() =>
+                            router.push(`/file/details/${sale._id}`)
+                          }
                           className="px-1 py-1 bg-green-500 text-white rounded text-[10px]"
                           title="Détails"
                         >
@@ -663,21 +793,45 @@ Observation: ${sale["OBSERVATION"] || ""}
                           </div>
                         </div>
                       </td>
-                      <td className="border px-1 py-1">{sale["NOM DU CLIENT"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["VENDEUR"] || "Inconnu"}</td>
+                      <td className="border px-1 py-1">
+                        {sale["NOM DU CLIENT"] || ""}
+                      </td>
+                      <td className="border px-1 py-1">
+                        {sale["VENDEUR"] || "Inconnu"}
+                      </td>
                       <td className="border px-1 py-1">{sale["BC"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["DESIGNATION"] || "N/A"}</td>
-                      <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT TTC"])}</td>
-                      <td className="border px-1 py-1">{sale["TAUX TVA"] || "N/A"}</td>
-                      <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT HT"])}</td>
-                      <td className={`border px-1 py-1 ${getBaremeBgColor(sale["BAREME COM"])}`}>
+                      <td className="border px-1 py-1">
+                        {sale["DESIGNATION"] || "N/A"}
+                      </td>
+                      <td className="border px-1 py-1 text-right">
+                        {formatNumber(sale["MONTANT TTC"])}
+                      </td>
+                      <td className="border px-1 py-1">
+                        {sale["TAUX TVA"] || "N/A"}
+                      </td>
+                      <td className="border px-1 py-1 text-right">
+                        {formatNumber(sale["MONTANT HT"])}
+                      </td>
+                      <td
+                        className={`border px-1 py-1 ${getBaremeBgColor(
+                          sale["BAREME COM"]
+                        )}`}
+                      >
                         <select
                           value={sale["BAREME COM"]}
-                          onChange={(e)=>{
-                            const newBareme=e.target.value;
-                            const updatedSale={...sale,"BAREME COM":newBareme};
-                            updatedSale["MONTANT COMMISSIONS"]=calculateCommission(updatedSale);
-                            setSales(prev=>prev.map(s=>s._id===sale._id?updatedSale:s));
+                          onChange={(e) => {
+                            const newBareme = e.target.value;
+                            const updatedSale = {
+                              ...sale,
+                              "BAREME COM": newBareme,
+                            };
+                            updatedSale["MONTANT COMMISSIONS"] =
+                              calculateCommission(updatedSale);
+                            setSales((prev) =>
+                              prev.map((s) =>
+                                s._id === sale._id ? updatedSale : s
+                              )
+                            );
                           }}
                           className="p-1 border border-gray-300 rounded text-[10px]"
                         >
@@ -690,7 +844,9 @@ Observation: ${sale["OBSERVATION"] || ""}
                         </select>
                       </td>
                       <td className="border px-1 py-1 text-right">
-                        {sale["MONTANT COMMISSIONS"] ? formatNumber(sale["MONTANT COMMISSIONS"]) : "-"}
+                        {sale["MONTANT COMMISSIONS"]
+                          ? formatNumber(sale["MONTANT COMMISSIONS"])
+                          : "-"}
                       </td>
                       <td className="border px-1 py-1 flex justify-center space-x-1">
                         <button
@@ -701,7 +857,9 @@ Observation: ${sale["OBSERVATION"] || ""}
                           <FontAwesomeIcon icon={faEdit} />
                         </button>
                         <button
-                          onClick={() => router.push(`/file/details/${sale._id}`)}
+                          onClick={() =>
+                            router.push(`/file/details/${sale._id}`)
+                          }
                           className="px-1 py-1 bg-green-500 text-white rounded text-[10px]"
                           title="Détails"
                         >
@@ -741,9 +899,15 @@ Observation: ${sale["OBSERVATION"] || ""}
                 onMouseEnter={() => setShowConfetti(true)}
                 onMouseLeave={() => setShowConfetti(false)}
               >
-                <td colSpan="12" className="border px-1 py-1 text-right">Totaux :</td>
-                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalTTC())}</td>
-                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalHT())}</td>
+                <td colSpan="12" className="border px-1 py-1 text-right">
+                  Totaux :
+                </td>
+                <td className="border px-1 py-1 text-right">
+                  {formatNumber(calculateTotalTTC())}
+                </td>
+                <td className="border px-1 py-1 text-right">
+                  {formatNumber(calculateTotalHT())}
+                </td>
                 <td colSpan="3" className="border px-1 py-1"></td>
               </tr>
             ) : (
@@ -752,10 +916,16 @@ Observation: ${sale["OBSERVATION"] || ""}
                 onMouseEnter={() => setShowConfetti(true)}
                 onMouseLeave={() => setShowConfetti(false)}
               >
-                <td colSpan="5" className="border px-1 py-1 text-right">Totaux :</td>
-                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalTTC())}</td>
+                <td colSpan="5" className="border px-1 py-1 text-right">
+                  Totaux :
+                </td>
+                <td className="border px-1 py-1 text-right">
+                  {formatNumber(calculateTotalTTC())}
+                </td>
                 <td className="border px-1 py-1"></td>
-                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalHT())}</td>
+                <td className="border px-1 py-1 text-right">
+                  {formatNumber(calculateTotalHT())}
+                </td>
                 <td colSpan="3" className="border px-1 py-1"></td>
               </tr>
             )}
@@ -775,7 +945,9 @@ Observation: ${sale["OBSERVATION"] || ""}
           Page {currentPage} sur {totalPages}
         </span>
         <button
-          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+          onClick={() =>
+            setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+          }
           disabled={currentPage === totalPages}
           className="px-1 py-1 bg-gray-500 text-white rounded disabled:opacity-50 text-[10px]"
         >
@@ -803,21 +975,51 @@ Observation: ${sale["OBSERVATION"] || ""}
               <h3 className="text-xs font-semibold mb-1">Aperçu de la Vente</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-[10px]">
                 <div>
-                  <p><span className="font-bold">Date de Vente:</span> {formatDate(selectedSale["DATE DE VENTE"])}</p>
-                  <p><span className="font-bold">Nom:</span> {selectedSale["NOM DU CLIENT"] || ""}</p>
-                  <p><span className="font-bold">Téléphone:</span> {selectedSale.TELEPHONE || ""}</p>
-                  <p><span className="font-bold">Adresse:</span> {selectedSale["ADRESSE DU CLIENT"] || "N/A"}</p>
+                  <p>
+                    <span className="font-bold">Date de Vente:</span>{" "}
+                    {formatDate(selectedSale["DATE DE VENTE"])}
+                  </p>
+                  <p>
+                    <span className="font-bold">Nom:</span>{" "}
+                    {selectedSale["NOM DU CLIENT"] || ""}
+                  </p>
+                  <p>
+                    <span className="font-bold">Téléphone:</span>{" "}
+                    {selectedSale.TELEPHONE || ""}
+                  </p>
+                  <p>
+                    <span className="font-bold">Adresse:</span>{" "}
+                    {selectedSale["ADRESSE DU CLIENT"] || "N/A"}
+                  </p>
                 </div>
                 <div>
-                  <p><span className="font-bold">Ville:</span> {selectedSale.VILLE || "N/A"}</p>
-                  <p><span className="font-bold">Vendeur:</span> {selectedSale["VENDEUR"] || ""}</p>
-                  <p><span className="font-bold">Désignation:</span> {selectedSale["DESIGNATION"] || ""}</p>
-                  <p><span className="font-bold">État:</span> {selectedSale.ETAT || ""}</p>
+                  <p>
+                    <span className="font-bold">Ville:</span>{" "}
+                    {selectedSale.VILLE || "N/A"}
+                  </p>
+                  <p>
+                    <span className="font-bold">Vendeur:</span>{" "}
+                    {selectedSale["VENDEUR"] || ""}
+                  </p>
+                  <p>
+                    <span className="font-bold">Désignation:</span>{" "}
+                    {selectedSale["DESIGNATION"] || ""}
+                  </p>
+                  <p>
+                    <span className="font-bold">État:</span>{" "}
+                    {selectedSale.ETAT || ""}
+                  </p>
                 </div>
               </div>
               <div className="mt-1 text-[10px]">
-                <p><span className="font-bold">Montant TTC:</span> {formatNumber(selectedSale["MONTANT TTC"])}</p>
-                <p><span className="font-bold">Montant HT:</span> {formatNumber(selectedSale["MONTANT HT"])}</p>
+                <p>
+                  <span className="font-bold">Montant TTC:</span>{" "}
+                  {formatNumber(selectedSale["MONTANT TTC"])}
+                </p>
+                <p>
+                  <span className="font-bold">Montant HT:</span>{" "}
+                  {formatNumber(selectedSale["MONTANT HT"])}
+                </p>
               </div>
             </div>
 
@@ -827,10 +1029,15 @@ Observation: ${sale["OBSERVATION"] || ""}
                 type="date"
                 value={selectedSale["PREVISION CHANTIER"] || ""}
                 onChange={(e) => {
-                  const updatedSale = { ...selectedSale, "PREVISION CHANTIER": e.target.value };
+                  const updatedSale = {
+                    ...selectedSale,
+                    "PREVISION CHANTIER": e.target.value,
+                  };
                   setSelectedSale(updatedSale);
                   setSales((prevSales) =>
-                    prevSales.map((s) => (s._id === updatedSale._id ? updatedSale : s))
+                    prevSales.map((s) =>
+                      s._id === updatedSale._id ? updatedSale : s
+                    )
                   );
                 }}
                 className="w-full p-1 border border-gray-300 rounded text-[10px]"
@@ -847,27 +1054,53 @@ Observation: ${sale["OBSERVATION"] || ""}
             </div>
 
             <div className="mb-2 text-[10px]">
-              <h3 className="font-bold mb-1 text-xs">Progression des Paiements :</h3>
+              <h3 className="font-bold mb-1 text-xs">
+                Progression des Paiements :
+              </h3>
               <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
                 <div
                   className="bg-green-500 h-2 rounded-full"
                   style={{ width: `${calculateProgress()}%` }}
                 ></div>
               </div>
-              <p><span className="font-bold">Total:</span> {formatNumber(parseFloat(selectedSale["MONTANT TTC"]) || parseFloat(selectedSale["MONTANT HT"]) || 0)}</p>
-              <p><span className="font-bold">Payé:</span> {formatNumber(calculateTotalPaid())}</p>
-              <p><span className="font-bold">Restant:</span> {formatNumber((parseFloat(selectedSale["MONTANT TTC"]) || parseFloat(selectedSale["MONTANT HT"]) || 0) - calculateTotalPaid())}</p>
+              <p>
+                <span className="font-bold">Total:</span>{" "}
+                {formatNumber(
+                  parseFloat(selectedSale["MONTANT TTC"]) ||
+                    parseFloat(selectedSale["MONTANT HT"]) ||
+                    0
+                )}
+              </p>
+              <p>
+                <span className="font-bold">Payé:</span>{" "}
+                {formatNumber(calculateTotalPaid())}
+              </p>
+              <p>
+                <span className="font-bold">Restant:</span>{" "}
+                {formatNumber(
+                  (parseFloat(selectedSale["MONTANT TTC"]) ||
+                    parseFloat(selectedSale["MONTANT HT"]) ||
+                    0) - calculateTotalPaid()
+                )}
+              </p>
             </div>
 
             <div className="mb-2 text-[10px]">
-              <h3 className="font-bold mb-1 text-xs">Historique des paiements:</h3>
+              <h3 className="font-bold mb-1 text-xs">
+                Historique des paiements:
+              </h3>
               {payments.length > 0 ? (
                 <ul className="list-disc list-inside text-[10px]">
                   {payments.map((payment) => (
                     <li key={payment.id} className="mb-1">
-                      <span className="font-medium">{formatDate(payment.date)}</span> - {formatNumber(payment.montant)}
+                      <span className="font-medium">
+                        {formatDate(payment.date)}
+                      </span>{" "}
+                      - {formatNumber(payment.montant)}
                       {payment.comment && (
-                        <p className="text-[9px] text-gray-600">Commentaire : {payment.comment}</p>
+                        <p className="text-[9px] text-gray-600">
+                          Commentaire : {payment.comment}
+                        </p>
                       )}
                     </li>
                   ))}
@@ -931,7 +1164,10 @@ Observation: ${sale["OBSERVATION"] || ""}
             {months.map((month, index) => (
               <button
                 key={index}
-                onClick={() => {setSelectedMonth(index); setCurrentPage(1);}}
+                onClick={() => {
+                  setSelectedMonth(index);
+                  setCurrentPage(1);
+                }}
                 className={`px-1 py-1 rounded whitespace-nowrap text-[10px] ${
                   selectedMonth === index ? "bg-blue-500" : "bg-gray-600"
                 }`}
@@ -947,13 +1183,18 @@ Observation: ${sale["OBSERVATION"] || ""}
             <select
               id="year"
               value={selectedYear}
-              onChange={(e) => {setSelectedYear(Number(e.target.value)); setCurrentPage(1);}}
+              onChange={(e) => {
+                setSelectedYear(Number(e.target.value));
+                setCurrentPage(1);
+              }}
               className="p-1 bg-gray-600 rounded text-white text-[10px]"
             >
               {Array.from({ length: 10 }, (_, i) => {
                 const year = new Date().getFullYear() - i;
                 return (
-                  <option key={year} value={year}>{year}</option>
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
                 );
               })}
             </select>
@@ -963,9 +1204,15 @@ Observation: ${sale["OBSERVATION"] || ""}
 
       <style jsx>{`
         @keyframes blink {
-          0% { opacity: 1; }
-          50% { opacity: 0.5; }
-          100% { opacity: 1; }
+          0% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+          100% {
+            opacity: 1;
+          }
         }
         .animate-blink {
           animation: blink 1s infinite;
@@ -975,11 +1222,18 @@ Observation: ${sale["OBSERVATION"] || ""}
           background-color: #fff3cd;
         }
         @keyframes blink-yellow {
-          0% { background-color: #fff3cd; }
-          50% { background-color: #ffecb5; }
-          100% { background-color: #fff3cd; }
+          0% {
+            background-color: #fff3cd;
+          }
+          50% {
+            background-color: #ffecb5;
+          }
+          100% {
+            background-color: #fff3cd;
+          }
         }
-        th, td {
+        th,
+        td {
           font-family: Arial, sans-serif;
           padding: 2px;
           border: 1px solid #d1d5db;
