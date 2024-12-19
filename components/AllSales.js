@@ -1210,55 +1210,48 @@ Observation: ${sale["OBSERVATION"] || ""}
         </footer>
       )}
 
-<style jsx>{`
-  @keyframes blink {
-    0% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.5;
-    }
-    100% {
-      opacity: 1;
-    }
-  }
-
-  .animate-blink {
-    animation: blink 1s infinite;
-  }
-
-  .animate-blink-yellow {
-    animation: blink-yellow 1s infinite;
-    background-color: #fff3cd;
-  }
-
-  @keyframes blink-yellow {
-    0% {
-      background-color: #fff3cd;
-    }
-    50% {
-      background-color: #ffecb5;
-    }
-    100% {
-      background-color: #fff3cd;
-    }
-  }
-
-  th,
-  td {
-    font-family: Arial, sans-serif;
-    font-size: 12px; /* Taille définie ici, ajustez comme nécessaire */
-    padding: 5px; /* Ajout d'un peu plus d'espace autour des cellules */
-    border: 1px solid #d1d5db;
-    white-space: nowrap;
-    text-align: center;
-  }
-
-  th {
-    font-weight: bold;
-    background-color: #f4f4f4; /* Une légère couleur pour la différenciation */
-  }
-`}</style>
+      <style jsx>{`
+        @keyframes blink {
+          0% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+          100% {
+            opacity: 1;
+          }
+        }
+        .animate-blink {
+          animation: blink 1s infinite;
+        }
+        .animate-blink-yellow {
+          animation: blink-yellow 1s infinite;
+          background-color: #fff3cd;
+        }
+        @keyframes blink-yellow {
+          0% {
+            background-color: #fff3cd;
+          }
+          50% {
+            background-color: #ffecb5;
+          }
+          100% {
+            background-color: #fff3cd;
+          }
+        }
+        th,
+        td {
+          font-family: Arial, sans-serif;
+          padding: 2px;
+          border: 1px solid #d1d5db;
+          white-space: nowrap;
+          text-align: center;
+        }
+        th {
+          font-weight: bold;
+        }
+      `}</style>
     </div>
   );
 };
