@@ -77,10 +77,10 @@ const MyDocument = ({ sale }) => (
             Adresse: {sale["ADRESSE DU CLIENT"] || ""},{" "}
             {sale.CP || ""}
           </Text>
+          <Text style={styles.text}>Ville: {sale.VILLE || ""}</Text>
           <Text style={styles.text}>
             Bâtiment, Code, Étage: {sale["CODE INTERP etage"] || ""}
           </Text>
-          <Text style={styles.text}>Ville: {sale.VILLE || ""}</Text>
           <Text style={styles.text}>
             Téléphone: {sale.TELEPHONE || ""}
           </Text>
