@@ -250,8 +250,8 @@ const EditSale = () => {
                         setShowCustomTVA(e.target.value === "Autre");
                       }}
                     >
-                      <option value="5.5">5.5%</option>
-                      <option value="10">10%</option>
+                      <option value="0.55">5.5%</option>
+                      <option value="0.1">10%</option>
                       <option value="Autre">Autre</option>
                     </select>
                     {showCustomTVA && (
