@@ -116,27 +116,35 @@ const processSalesData = (salesData) => {
 
       let montantHT = parseFloat(sale["MONTANT HT"]);
       let montantTTC = parseFloat(sale["MONTANT TTC"]);
-      let tauxTVA = parseFloat(sale["TAUX TVA"]) || 5.5;
+      let tauxTVA = parseFloat(sale["TAUX TVA"]); // Taux de TVA récupéré tel quel
 
-      if (tauxTVA !== 5.5 && tauxTVA !== 10) {
-        tauxTVA = 5.5;
+      // Validation du taux de TVA
+      if (isNaN(tauxTVA) || tauxTVA <= 0) {
+        tauxTVA = null; // Si invalide, on ne calcule rien
       }
 
-      const tvaRate = tauxTVA === 10 ? 0.1 : 0.055;
-      if (isNaN(montantTTC) && !isNaN(montantHT)) {
-        montantTTC = montantHT * (1 + tvaRate);
-        sale["MONTANT TTC"] = montantTTC.toFixed(2);
+      if (tauxTVA) {
+        const tvaRate = tauxTVA; // Le taux est utilisé tel quel (ex: 0.055 pour 5.5%)
+
+        if (isNaN(montantTTC) && !isNaN(montantHT)) {
+          montantTTC = montantHT * (1 + tvaRate);
+          sale["MONTANT TTC"] = montantTTC.toFixed(2);
+        }
+        if (isNaN(montantHT) && !isNaN(montantTTC)) {
+          montantHT = montantTTC / (1 + tvaRate);
+          sale["MONTANT HT"] = montantHT.toFixed(2);
+        }
       }
-      if (isNaN(montantHT) && !isNaN(montantTTC)) {
-        montantHT = montantTTC / (1 + tvaRate);
-        sale["MONTANT HT"] = montantHT.toFixed(2);
-      }
+
       if (isNaN(montantHT) && isNaN(montantTTC)) {
         sale["MONTANT HT"] = "0.00";
         sale["MONTANT TTC"] = "0.00";
       }
 
-      sale["TAUX TVA"] = tauxTVA === 10 ? "10,0%" : "5,5%";
+      // Conversion du taux de TVA pour l'affichage
+      sale["TAUX TVA"] = tauxTVA
+        ? `${(tauxTVA * 100).toFixed(1).replace(".", ",")}%` // Convertit 0.055 en "5,5%"
+        : "";
 
       if (!sale["PREVISION CHANTIER"]) {
         sale["PREVISION CHANTIER"] = null;
