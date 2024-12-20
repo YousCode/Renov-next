@@ -42,7 +42,7 @@ const formatNumber = (value) => {
   }).format(number);
 };
 
-
+const EXCLUDED_STATES = ["annule"];
 
 const isExcludedState = (etat) => {
   if (!etat) return false;
