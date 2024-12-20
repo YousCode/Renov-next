@@ -130,42 +130,16 @@ const EditSale = () => {
     );
   if (!sale) return null;
 
-  // Champs à exclure
-  const excludedFields = [
-    "_id",
-    "createdAt",
-    "updatedAt",
-    "__v",
-    "TE",
-    "CA MENSUEL",
-    "OBSERVATION",
-    "Barème COM",
-    "PREVISION CHANTIER",
-    "Montant commissions en €",
-    "COMISSION SOLO",
-  ];
+  const excludedFields = ["_id", "createdAt", "updatedAt", "__v", "DATE DE VENTE"];
 
-  // Fonction pour copier les données au format CSV
   const handleCopyCSV = () => {
     const entries = Object.entries(sale).filter(([key]) => !excludedFields.includes(key));
     const line = entries.map(([key, val]) => val || "").join(";");
-    navigator.clipboard
-      .writeText(line)
-      .then(() =>
-        setNotification({
-          type: "success",
-          message: "Ligne CSV copiée dans le presse-papiers !",
-        })
-      )
-      .catch(() =>
-        setNotification({
-          type: "error",
-          message: "Erreur lors de la copie.",
-        })
-      );
+    navigator.clipboard.writeText(line)
+      .then(() => setNotification({ type: "success", message: "Ligne CSV copiée dans le presse-papiers !" }))
+      .catch(() => setNotification({ type: "error", message: "Erreur lors de la copie." }));
   };
 
-  // Fonction pour télécharger les données au format CSV
   const handleDownloadCSV = () => {
     const entries = Object.entries(sale).filter(([key]) => !excludedFields.includes(key));
     const headers = entries.map(([key]) => key).join(";");
@@ -181,26 +155,7 @@ const EditSale = () => {
     document.body.removeChild(a);
   };
 
-  const defaultSale = {
-    "DATE DE VENTE": saleDate ? new Date(saleDate).toISOString().split("T")[0] : "",
-    CIVILITE: "",
-    "NOM DU CLIENT": "",
-    prenom: "",
-    "ADRESSE DU CLIENT": "",
-    "CODE INTERP etage": "",
-    VILLE: "",
-    CP: "",
-    TELEPHONE: "",
-    VENDEUR: "",
-    DESIGNATION: "",
-    "TAUX TVA": "5.5",
-    "MONTANT HT": "",
-    "MONTANT TTC": "",
-    "MONTANT ANNULE": "",
-    "ETAT": "",
-  };
-
-  const currentSale = { ...defaultSale, ...sale };
+  const currentSale = { ...sale };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-200 to-grey-600">
@@ -225,101 +180,14 @@ const EditSale = () => {
           className="bg-white bg-opacity-80 backdrop-filter backdrop-blur-lg rounded-lg shadow-2xl p-6 animate-slide-up"
         >
           <div className="grid grid-cols-2 gap-6">
+            <div className="mb-4 col-span-2">
+              <label className="block text-gray-800 font-semibold mb-2">Date de vente</label>
+              <p className="border border-gray-300 p-2 rounded-md bg-gray-100 text-gray-800">
+                {sale["DATE DE VENTE"] || "Non spécifiée"}
+              </p>
+            </div>
             {Object.entries(currentSale).map(([key, value]) => {
               if (excludedFields.includes(key)) return null;
-
-              if (key === "ETAT") {
-                return (
-                  <div className="mb-4 col-span-2" key={key}>
-                    <label className="block text-gray-800 font-semibold mb-2">
-                      {key.replace(/_/g, " ")}
-                    </label>
-                    <select
-                      className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
-                      name="ETAT"
-                      value={value || ""}
-                      onChange={handleInputChange}
-                    >
-                      <option value="">Sélectionner un état</option>
-                      <option value="En attente">En attente</option>
-                      <option value="Confirmé">Confirmé</option>
-                      <option value="Annulé">Annulé</option>
-                    </select>
-                  </div>
-                );
-              }
-
-              if (key === "TAUX TVA") {
-                return (
-                  <div className="mb-4" key={key}>
-                    <label className="block text-gray-800 font-semibold mb-2">
-                      {key.replace(/_/g, " ")}
-                    </label>
-                    <select
-                      className="border border-gray-300 p-2 rounded-md w-full"
-                      name="TAUX TVA"
-                      value={value || ""}
-                      onChange={(e) => {
-                        handleInputChange(e);
-                        setShowCustomTVA(e.target.value === "Autre");
-                      }}
-                    >
-                      <option value="0.55">5.5%</option>
-                      <option value="0.1">10%</option>
-                      <option value="Autre">Autre</option>
-                    </select>
-                    {showCustomTVA && (
-                      <input
-                        className="border border-gray-300 p-2 rounded-md w-full mt-2"
-                        type="number"
-                        name="TAUX TVA"
-                        value={value || ""}
-                        onChange={handleInputChange}
-                        placeholder="Entrez le taux de TVA"
-                        step="0.01"
-                        min="0"
-                      />
-                    )}
-                  </div>
-                );
-              }
-
-              if (key === "MONTANT TTC") {
-                return (
-                  <div className="mb-4" key={key}>
-                    <label className="block text-gray-800 font-semibold mb-2">
-                      {key.replace(/_/g, " ")}
-                    </label>
-                    <input
-                      className="border border-gray-300 p-2 rounded-md w-full"
-                      type="number"
-                      name="MONTANT TTC"
-                      value={value || ""}
-                      onChange={handleInputChange}
-                      step="0.01"
-                      min="0"
-                      placeholder="Montant TTC"
-                    />
-                  </div>
-                );
-              }
-
-              if (key === "MONTANT HT") {
-                return (
-                  <div className="mb-4" key={key}>
-                    <label className="block text-gray-800 font-semibold mb-2">
-                      Montant HT (Calculé)
-                    </label>
-                    <input
-                      className="border border-gray-300 p-2 rounded-md w-full bg-gray-100 cursor-not-allowed"
-                      type="text"
-                      name="MONTANT HT"
-                      value={value || ""}
-                      readOnly
-                    />
-                  </div>
-                );
-              }
 
               return (
                 <div className="mb-4" key={key}>
@@ -328,11 +196,10 @@ const EditSale = () => {
                   </label>
                   <input
                     className="border border-gray-300 p-2 rounded-md w-full"
-                    type={key === "DATE DE VENTE" ? "date" : "text"}
+                    type="text"
                     name={key}
                     value={value || ""}
                     onChange={handleInputChange}
-                    required={["NOM DU CLIENT", "prenom", "ADRESSE DU CLIENT"].includes(key)}
                   />
                 </div>
               );
@@ -340,10 +207,7 @@ const EditSale = () => {
           </div>
 
           <div className="flex flex-wrap justify-center gap-4 mt-6">
-            <button
-              className="bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600"
-              type="submit"
-            >
+            <button className="bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600" type="submit">
               <FontAwesomeIcon icon={faSave} /> Valider
             </button>
             <button
