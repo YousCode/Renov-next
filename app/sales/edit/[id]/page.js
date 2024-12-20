@@ -96,7 +96,6 @@ const EditSale = () => {
           type: "success",
           message: "Les données ont été mises à jour avec succès.",
         });
-        // Optionnel : redirection après quelques secondes
         setTimeout(() => {
           router.back(); // Retourne à la page précédente
         }, 2000);
@@ -131,30 +130,52 @@ const EditSale = () => {
     );
   if (!sale) return null;
 
-  // Champs à exclure du CSV
-  const excludedFields = ["_id", "createdAt", "updatedAt", "__v"];
+  // Champs à exclure
+  const excludedFields = [
+    "_id",
+    "createdAt",
+    "updatedAt",
+    "__v",
+    "TE",
+    "CA MENSUEL",
+    "OBSERVATION",
+    "Barème COM",
+    "PREVISION CHANTIER",
+    "Montant commissions en €",
+    "COMISSION SOLO",
+  ];
 
   // Fonction pour copier les données au format CSV
   const handleCopyCSV = () => {
     const entries = Object.entries(sale).filter(([key]) => !excludedFields.includes(key));
-    // Générer une seule ligne CSV avec ; comme séparateur
     const line = entries.map(([key, val]) => val || "").join(";");
-    navigator.clipboard.writeText(line)
-      .then(()=>setNotification({type:"success",message:"Ligne CSV copiée dans le presse-papiers !"}))
-      .catch(()=>setNotification({type:"error",message:"Erreur lors de la copie."}));
+    navigator.clipboard
+      .writeText(line)
+      .then(() =>
+        setNotification({
+          type: "success",
+          message: "Ligne CSV copiée dans le presse-papiers !",
+        })
+      )
+      .catch(() =>
+        setNotification({
+          type: "error",
+          message: "Erreur lors de la copie.",
+        })
+      );
   };
 
   // Fonction pour télécharger les données au format CSV
   const handleDownloadCSV = () => {
     const entries = Object.entries(sale).filter(([key]) => !excludedFields.includes(key));
     const headers = entries.map(([key]) => key).join(";");
-    const values = entries.map(([key,val])=> val||"").join(";");
+    const values = entries.map(([key, val]) => val || "").join(";");
     const csv = headers + "\n" + values;
-    const blob = new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;
-    a.download=`vente_${id}.csv`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `vente_${id}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -166,7 +187,7 @@ const EditSale = () => {
     "NOM DU CLIENT": "",
     prenom: "",
     "ADRESSE DU CLIENT": "",
-    "CODE INTERP etage":"",
+    "CODE INTERP etage": "",
     VILLE: "",
     CP: "",
     TELEPHONE: "",
@@ -205,14 +226,7 @@ const EditSale = () => {
         >
           <div className="grid grid-cols-2 gap-6">
             {Object.entries(currentSale).map(([key, value]) => {
-              if (
-                key === "_id" ||
-                key === "createdAt" ||
-                key === "updatedAt" ||
-                key === "__v"
-              ) {
-                return null;
-              }
+              if (excludedFields.includes(key)) return null;
 
               if (key === "ETAT") {
                 return (
@@ -348,20 +362,7 @@ const EditSale = () => {
               <FontAwesomeIcon icon={faCopy} /> Copier CSV
             </button>
             <button
-              onClick={()=>{
-                const entries = Object.entries(sale).filter(([k])=>!excludedFields.includes(k));
-                const headers = entries.map(([k])=>k).join(";");
-                const values = entries.map(([k,v])=>v||"").join(";");
-                const csv = headers+"\n"+values;
-                const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
-                const url=URL.createObjectURL(blob);
-                const a=document.createElement('a');
-                a.href=url;
-                a.download=`vente_${id}.csv`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-              }}
+              onClick={handleDownloadCSV}
               className="bg-green-500 text-white py-2 px-6 rounded-md hover:bg-green-600"
               type="button"
               title="Télécharger la vente au format CSV"

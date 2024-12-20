@@ -21,6 +21,8 @@ const venteSchema = new mongoose.Schema({
   "MONTANT ANNULE": { type: Number },
   "CA MENSUEL": { type: Number },
   "ETAT": { type: String },
+  "PREVISION CHANTIER": { type: Date }, 
+  "OBSERVATION": { type: String },
   "Barème COM": { type: Number }, 
   "Montant commissions en €": { type: Number }, 
   createdAt: { type: Date, default: Date.now },
