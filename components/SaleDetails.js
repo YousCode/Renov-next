@@ -64,26 +64,17 @@ const MyDocument = ({ sale }) => (
           <Text style={styles.green}>
             Bon de commande N°: {sale["NUMERO BC"] || ""}
           </Text>
+          <Text style={styles.text}>Civilité: {sale.CIVILITE || ""}</Text>
+          <Text style={styles.textB}>Nom: {sale["NOM DU CLIENT"] || ""}</Text>
+          <Text style={styles.textB}>Prénom: {sale.prenom || ""}</Text>
           <Text style={styles.text}>
-            Civilité: {sale.CIVILITE || ""}
-          </Text>
-          <Text style={styles.textB}>
-            Nom: {sale["NOM DU CLIENT"] || ""}
-          </Text>
-          <Text style={styles.textB}>
-            Prénom: {sale.prenom || ""}
-          </Text>
-          <Text style={styles.text}>
-            Adresse: {sale["ADRESSE DU CLIENT"] || ""},{" "}
-            {sale.CP || ""}
+            Adresse: {sale["ADRESSE DU CLIENT"] || ""}, {sale.CP || ""}
           </Text>
           <Text style={styles.text}>Ville: {sale.VILLE || ""}</Text>
           <Text style={styles.text}>
             Bâtiment, Code, Étage: {sale["CODE INTERP etage"] || ""}
           </Text>
-          <Text style={styles.text}>
-            Téléphone: {sale.TELEPHONE || ""}
-          </Text>
+          <Text style={styles.text}>Téléphone: {sale.TELEPHONE || ""}</Text>
         </View>
 
         {/* Nature des travaux */}
@@ -96,7 +87,8 @@ const MyDocument = ({ sale }) => (
         {/* Délai d'intervention */}
         <View style={styles.section}>
           <Text style={styles.boldText}>
-            Délai d&apos;intervention: {formatDateFR(sale.DELAI_INTERVENTION)}
+            Délai d&apos;intervention:{" "}
+            {formatDateFR(sale["PREVISION CHANTIER"])}
           </Text>
         </View>
 
@@ -145,9 +137,7 @@ const MyDocument = ({ sale }) => (
             </View>
             <View style={styles.tableRow}>
               <View style={[styles.tableCol, styles.tableColDesignation]}>
-                <Text style={styles.tableCell}>
-                  {sale.DESIGNATION || ""}
-                </Text>
+                <Text style={styles.tableCell}>{sale.DESIGNATION || ""}</Text>
               </View>
               <View style={[styles.tableCol, styles.tableColQte]}>
                 <Text style={styles.tableCell}>{sale.qte || ""}</Text>
@@ -155,16 +145,12 @@ const MyDocument = ({ sale }) => (
               <View
                 style={[styles.tableCol, styles.tableColSurfaceEmplacement]}
               >
-                <Text style={styles.tableCell}>
-                  {sale.SURFACE || ""}
-                </Text>
+                <Text style={styles.tableCell}>{sale.SURFACE || ""}</Text>
               </View>
               <View
                 style={[styles.tableCol, styles.tableColSurfaceEmplacement]}
               >
-                <Text style={styles.tableCell}>
-                  {sale.EMPLACEMENT || ""}
-                </Text>
+                <Text style={styles.tableCell}>{sale.EMPLACEMENT || ""}</Text>
               </View>
             </View>
           </View>
@@ -175,9 +161,7 @@ const MyDocument = ({ sale }) => (
           <Image style={styles.bannerImage} src="../../important.jpg" />
         </View>
         <View style={styles.vendeurInfo}>
-          <Text style={styles.VENDEURText}>
-            VENDEUR: {sale.VENDEUR || ""}
-          </Text>
+          <Text style={styles.VENDEURText}>VENDEUR: {sale.VENDEUR || ""}</Text>
         </View>
       </View>
     </Page>

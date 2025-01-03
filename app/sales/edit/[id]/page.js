@@ -6,20 +6,67 @@ import Navbar from "@/components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSave, faFile, faCopy, faDownload } from "@fortawesome/free-solid-svg-icons";
 
-const TVA_RATE_DEFAULT = 20; // Taux de TVA par défaut en pourcentage
+// 1) Import de react-datepicker et son CSS
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
+// Taux de TVA par défaut
+const TVA_RATE_DEFAULT = 20;
+
+/**
+ * Convertit un objet Date JavaScript en string "dd/MM/yyyy"
+ * @param {Date} dateObj
+ * @returns {string} ex: "05/09/2023"
+ */
+function formatDateDDMMYYYY(dateObj) {
+  if (!(dateObj instanceof Date)) return "";
+  const d = String(dateObj.getDate()).padStart(2, "0");
+  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const y = dateObj.getFullYear();
+  return `${d}/${m}/${y}`;
+}
+
+/**
+ * parseDateString("05/09/2023") => Date(2023, 8, 5)
+ * parseDateString("2023-09-05T12:00:00Z") => Date(2023,8,5,12,0,0)
+ * Gère différents formats
+ */
+function parseDateString(str) {
+  if (!str) return null;
+  // Cas format ISO ou string commençant par yyyy-mm-dd
+  if (str.includes("T") || /^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return new Date(str);
+  }
+  // Cas "dd/mm/yyyy"
+  if (str.includes("/")) {
+    const [jour, mois, annee] = str.split("/");
+    return new Date(Number(annee), Number(mois) - 1, Number(jour));
+  }
+  // Sinon, fallback => new Date() (now)
+  return new Date();
+}
 
 const EditSale = () => {
   const { id } = useParams();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const saleDate = searchParams.get("date");
+  const saleDateParam = searchParams.get("date"); // ?date=...
+
   const [sale, setSale] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showCustomTVA, setShowCustomTVA] = useState(false);
-  const [notification, setNotification] = useState(null); // Pour les messages de notification
-  const router = useRouter();
 
+  const [notification, setNotification] = useState(null);
+
+  // 2) On gère deux états date (type Date) côté client :
+  //    - date de vente
+  //    - prévision chantier
+  const [saleDate, setSaleDate] = useState(null);
+  const [prevChantierDate, setPrevChantierDate] = useState(null);
+
+  // --------------------------------------------------
+  //  fetchSale : récupération de la vente
+  // --------------------------------------------------
   useEffect(() => {
     const fetchSale = async () => {
       setLoading(true);
@@ -28,146 +75,197 @@ const EditSale = () => {
           credentials: "include",
         });
         if (!response.ok) {
-          throw new Error(`Échec de la récupération de la vente : ${response.status}`);
+          throw new Error(`Échec de la récupération : ${response.status}`);
         }
         const data = await response.json();
-        if (saleDate) {
-          data.data["DATE DE VENTE"] = new Date(saleDate).toISOString().split("T")[0];
+
+        const vente = data.data;
+
+        // 1) Si ?date=... (format "dd/MM/yyyy" ou autre) => on l'applique à la "Date de Vente"
+        if (saleDateParam) {
+          setSaleDate(parseDateString(saleDateParam));
+          vente["DATE DE VENTE"] = saleDateParam;
+        } else {
+          // Sinon, si la DB n'a pas "DATE DE VENTE", on met la date du jour
+          if (!vente["DATE DE VENTE"]) {
+            const now = new Date();
+            setSaleDate(now);
+          } else {
+            setSaleDate(parseDateString(vente["DATE DE VENTE"]));
+          }
         }
-        setSale(data.data);
-      } catch (error) {
-        console.error("Erreur lors de la récupération des données de la vente :", error);
-        setError(`Erreur : ${error.message}`);
+
+        // 2) Prévision Chantier : parse le champ si présent
+        if (vente["PREVISION CHANTIER"]) {
+          setPrevChantierDate(parseDateString(vente["PREVISION CHANTIER"]));
+        }
+
+        setSale(vente);
+      } catch (err) {
+        console.error("Erreur :", err);
+        setError(`Erreur : ${err.message}`);
       } finally {
         setLoading(false);
       }
     };
-    fetchSale();
-  }, [id, saleDate]);
 
+    fetchSale();
+  }, [id, saleDateParam]);
+
+  // --------------------------------------------------
+  // handleInputChange : pour les autres champs (texte / number)
+  // --------------------------------------------------
   const handleInputChange = (event) => {
     const { name, value } = event.target;
-
     setSale((prev) => {
-      const updatedSale = { ...prev, [name]: value };
+      const updated = { ...prev, [name]: value };
 
-      // Calculer MONTANT HT en fonction du Montant TTC et du Taux TVA
+      // Recalcul MONTANT HT si Taux TVA / MONTANT TTC changent
       if (name === "MONTANT TTC" || name === "TAUX TVA") {
-        const montantTTC = parseFloat(updatedSale["MONTANT TTC"]) || 0;
-        let tauxTVA = parseFloat(updatedSale["TAUX TVA"]) || TVA_RATE_DEFAULT;
+        const montantTTC = parseFloat(updated["MONTANT TTC"]) || 0;
+        let tauxTVA = parseFloat(updated["TAUX TVA"]) || TVA_RATE_DEFAULT;
         if (tauxTVA > 1) {
           tauxTVA = tauxTVA / 100;
         }
-
-        const montantHT = montantTTC / (1 + tauxTVA);
-        updatedSale["MONTANT HT"] = montantHT > 0 ? montantHT.toFixed(2) : "0.00";
+        const ht = montantTTC / (1 + tauxTVA);
+        updated["MONTANT HT"] = ht > 0 ? ht.toFixed(2) : "0.00";
       }
 
-      return updatedSale;
+      return updated;
     });
   };
 
-  const handleSave = async (event) => {
-    event.preventDefault();
+  // --------------------------------------------------
+  // handleSave : sauvegarde
+  // --------------------------------------------------
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!sale) return;
 
-    // Champs obligatoires
-    const requiredFields = ["NOM DU CLIENT", "prenom", "ADRESSE DU CLIENT"];
-    const missingFields = requiredFields.filter((field) => !sale[field]);
-
-    if (missingFields.length > 0) {
+    // Vérifier des champs obligatoires
+    const required = ["NOM DU CLIENT", "prenom", "ADRESSE DU CLIENT"];
+    const missing = required.filter((f) => !sale[f]);
+    if (missing.length > 0) {
       setNotification({
         type: "error",
-        message: `Les champs suivants sont obligatoires : ${missingFields.join(", ")}`,
+        message: `Champs obligatoires manquants : ${missing.join(", ")}`,
       });
       return;
     }
 
+    // 1) On convertit nos DatePicker en "dd/MM/yyyy" (ou ISO si vous voulez)
+    const dateVenteStr = saleDate ? formatDateDDMMYYYY(saleDate) : "";
+    const prevChantierStr = prevChantierDate
+      ? formatDateDDMMYYYY(prevChantierDate)
+      : "";
+
+    // On stocke ces formats dans l’objet sale
+    sale["DATE DE VENTE"] = dateVenteStr;
+    sale["PREVISION CHANTIER"] = prevChantierStr;
+
     try {
       const response = await fetch(`/api/ventes/${id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify(sale),
       });
-
-      if (response.ok) {
-        setNotification({
-          type: "success",
-          message: "Les données ont été mises à jour avec succès.",
-        });
-        // Optionnel : redirection après quelques secondes
-        setTimeout(() => {
-          router.back(); // Retourne à la page précédente
-        }, 2000);
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Erreur : ${response.status}`);
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.message || `Erreur : ${response.status}`);
       }
-    } catch (error) {
-      console.error("Erreur lors de la sauvegarde de la vente :", error.message);
+
+      setNotification({
+        type: "success",
+        message: "Vente mise à jour avec succès !",
+      });
+      setTimeout(() => {
+        router.back();
+      }, 1500);
+    } catch (err) {
+      console.error("Erreur lors de la sauvegarde :", err.message);
       setNotification({
         type: "error",
-        message: `Erreur lors de la sauvegarde : ${error.message}`,
+        message: `Erreur : ${err.message}`,
       });
     }
   };
 
-  const handleFileAction = (saleId) => {
-    router.push(`/file/details/${saleId}`);
-  };
-
-  if (loading)
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-center text-gray-700 text-xl animate-pulse">Chargement...</p>
-      </div>
-    );
-  if (error)
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-center text-red-500 text-xl">{error}</p>
-      </div>
-    );
-  if (!sale) return null;
-
-  // Champs à exclure du CSV
+  // --------------------------------------------------
+  // CSV
+  // --------------------------------------------------
   const excludedFields = ["_id", "createdAt", "updatedAt", "__v"];
 
-  // Fonction pour copier les données au format CSV
   const handleCopyCSV = () => {
-    const entries = Object.entries(sale).filter(([key]) => !excludedFields.includes(key));
-    // Générer une seule ligne CSV avec ; comme séparateur
-    const line = entries.map(([key, val]) => val || "").join(";");
-    navigator.clipboard.writeText(line)
-      .then(()=>setNotification({type:"success",message:"Ligne CSV copiée dans le presse-papiers !"}))
-      .catch(()=>setNotification({type:"error",message:"Erreur lors de la copie."}));
+    if (!sale) return;
+    const entries = Object.entries(sale).filter(([k]) => !excludedFields.includes(k));
+    const line = entries.map(([k, v]) => v || "").join(";");
+    navigator.clipboard
+      .writeText(line)
+      .then(() => {
+        setNotification({
+          type: "success",
+          message: "CSV copié dans le presse-papiers !",
+        });
+      })
+      .catch(() => {
+        setNotification({
+          type: "error",
+          message: "Erreur lors de la copie CSV.",
+        });
+      });
   };
 
-  // Fonction pour télécharger les données au format CSV
   const handleDownloadCSV = () => {
-    const entries = Object.entries(sale).filter(([key]) => !excludedFields.includes(key));
-    const headers = entries.map(([key]) => key).join(";");
-    const values = entries.map(([key,val])=> val||"").join(";");
+    if (!sale) return;
+    const entries = Object.entries(sale).filter(([k]) => !excludedFields.includes(k));
+    const headers = entries.map(([k]) => k).join(";");
+    const values = entries.map(([k, v]) => v || "").join(";");
     const csv = headers + "\n" + values;
-    const blob = new Blob([csv],{type:"text/csv;charset=utf-8;"});
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;
-    a.download=`vente_${id}.csv`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `vente_${id}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   };
 
+  // --------------------------------------------------
+  // Page "Fichier"
+  // --------------------------------------------------
+  const handleFileAction = (saleId) => {
+    router.push(`/file/details/${saleId}`);
+  };
+
+  // --------------------------------------------------
+  // ÉTATS DE CHARGEMENT
+  // --------------------------------------------------
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p>Chargement...</p>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-red-500">{error}</p>
+      </div>
+    );
+  }
+  if (!sale) return null;
+
+  // Valeurs par défaut
   const defaultSale = {
-    "DATE DE VENTE": saleDate ? new Date(saleDate).toISOString().split("T")[0] : "",
     CIVILITE: "",
     "NOM DU CLIENT": "",
     prenom: "",
     "ADRESSE DU CLIENT": "",
-    "CODE INTERP etage":"",
+    "CODE INTERP etage": "",
     VILLE: "",
     CP: "",
     TELEPHONE: "",
@@ -177,18 +275,24 @@ const EditSale = () => {
     "MONTANT HT": "",
     "MONTANT TTC": "",
     "MONTANT ANNULE": "",
-    "ETAT": "",
+    ETAT: "",
+    "PREVISION CHANTIER": "",
+    OBSERVATION: "",
   };
-
   const currentSale = { ...defaultSale, ...sale };
 
+  // --------------------------------------------------
+  // RENDU
+  // --------------------------------------------------
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-200 to-grey-600">
       <Navbar />
-      <div className="max-w-6xl mx-auto py-8 px-4">
-        <h2 className="text-3xl text-white font-bold mb-6 text-center animate-fade-in">
+
+      <div className="max-w-5xl mx-auto py-8 px-4">
+        <h2 className="text-3xl text-white font-bold mb-6 text-center">
           Compléter la vente
         </h2>
+
         {notification && (
           <div
             className={`p-4 rounded-md mb-6 ${
@@ -200,172 +304,308 @@ const EditSale = () => {
             {notification.message}
           </div>
         )}
+
         <form
           onSubmit={handleSave}
-          className="bg-white bg-opacity-80 backdrop-filter backdrop-blur-lg rounded-lg shadow-2xl p-6 animate-slide-up"
+          className="bg-white bg-opacity-90 rounded-lg shadow-2xl p-6"
         >
           <div className="grid grid-cols-2 gap-6">
-            {Object.entries(currentSale).map(([key, value]) => {
-              if (
-                key === "_id" ||
-                key === "createdAt" ||
-                key === "updatedAt" ||
-                key === "__v"
-              ) {
-                return null;
-              }
+            {/* ---- Date de Vente ---- */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                Date de Vente
+              </label>
+              <DatePicker
+                selected={saleDate}               // état local (type Date)
+                onChange={(date) => setSaleDate(date)} 
+                dateFormat="dd/MM/yyyy"            // affichage
+                className="border border-gray-300 p-2 rounded-md w-full"
+              />
+            </div>
 
-              if (key === "ETAT") {
-                return (
-                  <div className="mb-4 col-span-2" key={key}>
-                    <label className="block text-gray-800 font-semibold mb-2">
-                      {key.replace(/_/g, " ")}
-                    </label>
-                    <select
-                      className="border border-gray-300 p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 transition duration-300"
-                      name="ETAT"
-                      value={value || ""}
-                      onChange={handleInputChange}
-                    >
-                      <option value="">Sélectionner un état</option>
-                      <option value="En attente">En attente</option>
-                      <option value="Confirmé">Confirmé</option>
-                      <option value="Annulé">Annulé</option>
-                    </select>
-                  </div>
-                );
-              }
+            {/* CIVILITE */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                CIVILITE
+              </label>
+              <input
+                type="text"
+                name="CIVILITE"
+                value={currentSale.CIVILITE || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+              />
+            </div>
 
-              if (key === "TAUX TVA") {
-                return (
-                  <div className="mb-4" key={key}>
-                    <label className="block text-gray-800 font-semibold mb-2">
-                      {key.replace(/_/g, " ")}
-                    </label>
-                    <select
-                      className="border border-gray-300 p-2 rounded-md w-full"
-                      name="TAUX TVA"
-                      value={value || ""}
-                      onChange={(e) => {
-                        handleInputChange(e);
-                        setShowCustomTVA(e.target.value === "Autre");
-                      }}
-                    >
-                      <option value="0.55">5.5%</option>
-                      <option value="0.1">10%</option>
-                      <option value="Autre">Autre</option>
-                    </select>
-                    {showCustomTVA && (
-                      <input
-                        className="border border-gray-300 p-2 rounded-md w-full mt-2"
-                        type="number"
-                        name="TAUX TVA"
-                        value={value || ""}
-                        onChange={handleInputChange}
-                        placeholder="Entrez le taux de TVA"
-                        step="0.01"
-                        min="0"
-                      />
-                    )}
-                  </div>
-                );
-              }
+            {/* NOM DU CLIENT */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                NOM DU CLIENT
+              </label>
+              <input
+                type="text"
+                name="NOM DU CLIENT"
+                value={currentSale["NOM DU CLIENT"] || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+                required
+              />
+            </div>
 
-              if (key === "MONTANT TTC") {
-                return (
-                  <div className="mb-4" key={key}>
-                    <label className="block text-gray-800 font-semibold mb-2">
-                      {key.replace(/_/g, " ")}
-                    </label>
-                    <input
-                      className="border border-gray-300 p-2 rounded-md w-full"
-                      type="number"
-                      name="MONTANT TTC"
-                      value={value || ""}
-                      onChange={handleInputChange}
-                      step="0.01"
-                      min="0"
-                      placeholder="Montant TTC"
-                    />
-                  </div>
-                );
-              }
+            {/* prenom */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                prenom
+              </label>
+              <input
+                type="text"
+                name="prenom"
+                value={currentSale.prenom || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+                required
+              />
+            </div>
 
-              if (key === "MONTANT HT") {
-                return (
-                  <div className="mb-4" key={key}>
-                    <label className="block text-gray-800 font-semibold mb-2">
-                      Montant HT (Calculé)
-                    </label>
-                    <input
-                      className="border border-gray-300 p-2 rounded-md w-full bg-gray-100 cursor-not-allowed"
-                      type="text"
-                      name="MONTANT HT"
-                      value={value || ""}
-                      readOnly
-                    />
-                  </div>
-                );
-              }
+            {/* ADRESSE DU CLIENT */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                ADRESSE DU CLIENT
+              </label>
+              <input
+                type="text"
+                name="ADRESSE DU CLIENT"
+                value={currentSale["ADRESSE DU CLIENT"] || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+                required
+              />
+            </div>
 
-              return (
-                <div className="mb-4" key={key}>
-                  <label className="block text-gray-800 font-semibold mb-2">
-                    {key.replace(/_/g, " ")}
-                  </label>
-                  <input
-                    className="border border-gray-300 p-2 rounded-md w-full"
-                    type={key === "DATE DE VENTE" ? "date" : "text"}
-                    name={key}
-                    value={value || ""}
-                    onChange={handleInputChange}
-                    required={["NOM DU CLIENT", "prenom", "ADRESSE DU CLIENT"].includes(key)}
-                  />
-                </div>
-              );
-            })}
+            {/* CODE INTERP etage */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                CODE INTERP etage
+              </label>
+              <input
+                type="text"
+                name="CODE INTERP etage"
+                value={currentSale["CODE INTERP etage"] || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+              />
+            </div>
+
+            {/* VILLE */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                VILLE
+              </label>
+              <input
+                type="text"
+                name="VILLE"
+                value={currentSale.VILLE || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+              />
+            </div>
+
+            {/* CP */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                CP
+              </label>
+              <input
+                type="text"
+                name="CP"
+                value={currentSale.CP || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+              />
+            </div>
+
+            {/* TELEPHONE */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                TELEPHONE
+              </label>
+              <input
+                type="text"
+                name="TELEPHONE"
+                value={currentSale.TELEPHONE || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+              />
+            </div>
+
+            {/* VENDEUR */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                VENDEUR
+              </label>
+              <input
+                type="text"
+                name="VENDEUR"
+                value={currentSale.VENDEUR || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+              />
+            </div>
+
+            {/* DESIGNATION */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                DESIGNATION
+              </label>
+              <input
+                type="text"
+                name="DESIGNATION"
+                value={currentSale.DESIGNATION || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+              />
+            </div>
+
+            {/* TAUX TVA */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                TAUX TVA
+              </label>
+              <select
+                name="TAUX TVA"
+                value={currentSale["TAUX TVA"] || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+              >
+                <option value="5.5">5.5%</option>
+                <option value="10">10%</option>
+                <option value="20">20%</option>
+                <option value="Autre">Autre</option>
+              </select>
+            </div>
+
+            {/* MONTANT HT (Calculé) */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                Montant HT (Calculé)
+              </label>
+              <input
+                type="text"
+                name="MONTANT HT"
+                value={currentSale["MONTANT HT"] || ""}
+                readOnly
+                className="border border-gray-300 p-2 rounded-md w-full bg-gray-100 cursor-not-allowed"
+              />
+            </div>
+
+            {/* MONTANT TTC */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                MONTANT TTC
+              </label>
+              <input
+                type="number"
+                name="MONTANT TTC"
+                value={currentSale["MONTANT TTC"] || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+                step="0.01"
+                min="0"
+              />
+            </div>
+
+            {/* MONTANT ANNULE */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                MONTANT ANNULE
+              </label>
+              <input
+                type="number"
+                name="MONTANT ANNULE"
+                value={currentSale["MONTANT ANNULE"] || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+                step="0.01"
+                min="0"
+              />
+            </div>
+
+            {/* ETAT */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                ETAT
+              </label>
+              <select
+                name="ETAT"
+                value={currentSale.ETAT || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+              >
+                <option value="">Sélectionner un état</option>
+                <option value="En attente">En attente</option>
+                <option value="Confirmé">Confirmé</option>
+                <option value="Annulé">Annulé</option>
+              </select>
+            </div>
+
+            {/* ---- Prévision Chantier ---- */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                Prévision Chantier
+              </label>
+              <DatePicker
+                selected={prevChantierDate}
+                onChange={(date) => setPrevChantierDate(date)}
+                dateFormat="dd/MM/yyyy"
+                className="border border-gray-300 p-2 rounded-md w-full"
+              />
+            </div>
+
+            {/* OBSERVATION */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                OBSERVATION
+              </label>
+              <input
+                type="text"
+                name="OBSERVATION"
+                value={currentSale.OBSERVATION || ""}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+              />
+            </div>
           </div>
 
+          {/* Boutons */}
           <div className="flex flex-wrap justify-center gap-4 mt-6">
             <button
-              className="bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600"
               type="submit"
+              className="bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600"
             >
               <FontAwesomeIcon icon={faSave} /> Valider
             </button>
+
             <button
+              type="button"
               onClick={() => handleFileAction(id)}
               className="bg-gray-500 text-white py-2 px-6 rounded-md hover:bg-gray-600"
-              type="button"
             >
               <FontAwesomeIcon icon={faFile} /> Fichier
             </button>
+
             <button
+              type="button"
               onClick={handleCopyCSV}
               className="bg-purple-500 text-white py-2 px-6 rounded-md hover:bg-purple-600"
-              type="button"
               title="Copier la vente en CSV"
             >
               <FontAwesomeIcon icon={faCopy} /> Copier CSV
             </button>
+
             <button
-              onClick={()=>{
-                const entries = Object.entries(sale).filter(([k])=>!excludedFields.includes(k));
-                const headers = entries.map(([k])=>k).join(";");
-                const values = entries.map(([k,v])=>v||"").join(";");
-                const csv = headers+"\n"+values;
-                const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
-                const url=URL.createObjectURL(blob);
-                const a=document.createElement('a');
-                a.href=url;
-                a.download=`vente_${id}.csv`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-              }}
-              className="bg-green-500 text-white py-2 px-6 rounded-md hover:bg-green-600"
               type="button"
-              title="Télécharger la vente au format CSV"
+              onClick={handleDownloadCSV}
+              className="bg-green-500 text-white py-2 px-6 rounded-md hover:bg-green-600"
             >
               <FontAwesomeIcon icon={faDownload} /> Télécharger CSV
             </button>
