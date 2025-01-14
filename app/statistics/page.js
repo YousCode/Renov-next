@@ -1,4 +1,4 @@
-"use client"; // Indique qu'il s'agit d'un composant Client Next.js
+"use client"; // Directive pour indiquer que c'est un Client Component
 
 import React, { useState, useEffect } from "react";
 import { Doughnut } from "react-chartjs-2";
@@ -6,7 +6,6 @@ import { ClipLoader } from "react-spinners";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import confetti from "canvas-confetti";
-
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -19,10 +18,8 @@ import {
   Colors,
 } from "chart.js";
 import ChartDataLabels from "chartjs-plugin-datalabels";
-
 import Navbar from "@/components/Navbar";
 
-// Enregistrement de Chart.js + plugins
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -35,7 +32,6 @@ ChartJS.register(
   ChartDataLabels
 );
 
-// Liste des vendeurs qu'on souhaite afficher
 const VENDORS_TO_DISPLAY = [
   "payet",
   "rivet",
@@ -55,35 +51,26 @@ const StatisticsDashboard = () => {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Filtre de période ("mois", "annee", "personnalise")
   const [filter, setFilter] = useState("mois");
-
-  // Dates pour filtrage
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
-
-  // Pour gérer la sélection du vendeur (modale) et le best-seller
   const [selectedSeller, setSelectedSeller] = useState(null);
   const [bestSeller, setBestSeller] = useState(null);
 
-  // ------------------------------------------------------------------
-  // 1. Récupération des ventes (Montant HT)
-  // ------------------------------------------------------------------
   useEffect(() => {
     const fetchSales = async () => {
       try {
-        const response = await fetch("/api/ventes"); // Endpoint à adapter si besoin
+        const response = await fetch("/api/ventes");
         if (!response.ok) {
-          throw new Error(`Échec de la récupération des ventes: ${response.statusText}`);
+          throw new Error(
+            `Échec de la récupération des ventes: ${response.statusText}`
+          );
         }
-        const data = await response.json(); // data.data => liste de ventes
+        const data = await response.json();
         setSales(data.data);
 
-        // Calcul du meilleur vendeur global
         const sortedSellers = data.data.reduce((acc, sale) => {
-          // Exclure si ETAT=annule ou MONTANT ANNULE>0
           if (
             normalizeString(sale["ETAT"]) !== "annule" &&
             parseFloat(sale["MONTANT ANNULE"]) === 0
@@ -91,27 +78,24 @@ const StatisticsDashboard = () => {
             const sellerField = sale["VENDEUR"];
             if (sellerField) {
               const sellers = sellerField.split("/").map(normalizeString);
-              const montantHT = parseFloat(sale["MONTANT HT"]) || 0;
-              // Répartition du HT s'il y a plusieurs vendeurs
+              const montantTTC = parseFloat(sale["MONTANT TTC "]);
               sellers.forEach((seller) => {
                 if (!acc[seller]) acc[seller] = 0;
-                acc[seller] += montantHT;
+                acc[seller] += montantTTC;
               });
             }
           }
           return acc;
         }, {});
 
-        // Détermine le meilleur vendeur global
         const topSeller = Object.entries(sortedSellers)
           .filter(([seller]) => VENDORS_TO_DISPLAY.includes(seller))
           .sort((a, b) => b[1] - a[1])[0];
 
         setBestSeller(topSeller ? topSeller[0] : null);
-        // On sélectionne aussi par défaut le best-seller
         setSelectedSeller(topSeller ? topSeller[0] : null);
-      } catch (err) {
-        setError(`Erreur: ${err.message}`);
+      } catch (error) {
+        setError(`Erreur: ${error.message}`);
       } finally {
         setLoading(false);
       }
@@ -120,11 +104,8 @@ const StatisticsDashboard = () => {
     fetchSales();
   }, []);
 
-  // ------------------------------------------------------------------
-  // 2. Confettis si on sélectionne le best-seller
-  // ------------------------------------------------------------------
   useEffect(() => {
-    if (selectedSeller && selectedSeller === bestSeller) {
+    if (selectedSeller === bestSeller) {
       triggerConfetti();
     }
   }, [selectedSeller, bestSeller]);
@@ -137,7 +118,6 @@ const StatisticsDashboard = () => {
     });
   };
 
-  // Normaliser une string (casse, accents)
   const normalizeString = (str) => {
     return str
       ? str
@@ -148,41 +128,40 @@ const StatisticsDashboard = () => {
       : "";
   };
 
-  // Regroupe Montant HT dans acc[seller].montantHT et .count
-  const groupByKey = (acc, key, ht, count) => {
+  const groupByKey = (acc, key, montantTTC, montantHT, count) => {
     if (!acc[key]) {
-      acc[key] = { montantHT: 0, count: 0 };
+      acc[key] = { montantTTC: 0, montantHT: 0, count: 0 };
     }
-    acc[key].montantHT += isNaN(ht) ? 0 : ht;
+    acc[key].montantTTC += isNaN(montantTTC) ? 0 : montantTTC;
+    acc[key].montantHT += isNaN(montantHT) ? 0 : montantHT;
     acc[key].count += isNaN(count) ? 0 : count;
   };
 
-  // ------------------------------------------------------------------
-  // 3. Filtrage par date (mois, année, personnalisé)
-  // ------------------------------------------------------------------
-  const filterSalesByDate = (allSales, filterType, selDate, start, end) => {
-    return allSales.filter((sale) => {
+  const filterSalesByDate = (
+    sales,
+    filter,
+    selectedDate,
+    startDate,
+    endDate
+  ) => {
+    return sales.filter((sale) => {
       const saleDate = new Date(sale["DATE DE VENTE"]);
-      if (isNaN(saleDate.getTime())) {
-        return false; // date invalide => on exclut
-      }
-      switch (filterType) {
+      switch (filter) {
         case "mois":
           return (
-            saleDate.getFullYear() === selDate.getFullYear() &&
-            saleDate.getMonth() === selDate.getMonth()
+            saleDate.getFullYear() === selectedDate.getFullYear() &&
+            saleDate.getMonth() === selectedDate.getMonth()
           );
         case "annee":
-          return saleDate.getFullYear() === selDate.getFullYear();
+          return saleDate.getFullYear() === selectedDate.getFullYear();
         case "personnalise":
-          return saleDate >= start && saleDate <= end;
+          return saleDate >= startDate && saleDate <= endDate;
         default:
           return true;
       }
     });
   };
 
-  // On applique le filtre aux ventes
   const filteredSales = filterSalesByDate(
     sales,
     filter,
@@ -191,48 +170,41 @@ const StatisticsDashboard = () => {
     endDate
   );
 
-  // ------------------------------------------------------------------
-  // 4. Calcul bestSellers (HT) sur la période filtrée
-  // ------------------------------------------------------------------
   const bestSellers = filteredSales.reduce((acc, sale) => {
-    // Exclusion si ETAT=annule ou MONTANT ANNULE>0
     if (
       normalizeString(sale["ETAT"]) === "annule" ||
-      parseFloat(sale["MONTANT ANNULE"]) > 0
+      parseFloat(sale["MONTANT ANNULE"]) === 0
     ) {
       return acc;
     }
-
     const sellerField = sale["VENDEUR"];
     if (sellerField) {
       const sellers = sellerField.split("/").map(normalizeString);
-      const montantHT = parseFloat(sale["MONTANT HT"]) || 0;
-      // Partage si plusieurs vendeurs
+      const montantTTC = parseFloat(sale["MONTANT TTC "]);
+      const montantHT = parseFloat(sale["MONTANT HT"]);
+      const shareTTC = montantTTC / sellers.length;
       const shareHT = montantHT / sellers.length;
       const shareCount = 1 / sellers.length;
+
       sellers.forEach((seller) => {
-        groupByKey(acc, seller, shareHT, shareCount);
+        if (seller) {
+          groupByKey(acc, seller, shareTTC, shareHT, shareCount);
+        }
       });
     }
+
     return acc;
   }, {});
 
-  // ------------------------------------------------------------------
-  // 5. Stats globales Agence
-  // ------------------------------------------------------------------
   const agencyStats = filteredSales.reduce(
     (acc, sale) => {
-      const valHT = parseFloat(sale["MONTANT HT"]) || 0;
-      acc.totalHT += valHT;
+      acc.totalSales += parseFloat(sale["MONTANT TTC "]) || 0;
       acc.totalCount += 1;
       return acc;
     },
-    { totalHT: 0, totalCount: 0 }
+    { totalSales: 0, totalCount: 0 }
   );
 
-  // ------------------------------------------------------------------
-  // Gestions d'états (chargement, erreur)
-  // ------------------------------------------------------------------
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -240,29 +212,24 @@ const StatisticsDashboard = () => {
       </div>
     );
   }
-  if (error) {
-    return <p className="text-center text-red-500">{error}</p>;
-  }
 
-  // Calcul du total HT (période filtrée)
-  const totalHT = Object.values(bestSellers).reduce(
-    (acc, { montantHT }) => acc + montantHT,
+  if (error) return <p className="text-center text-red-500">{error}</p>;
+
+  const totalSales = Object.values(bestSellers).reduce(
+    (acc, { montantTTC }) => acc + montantTTC,
     0
   );
 
-  // On trie les vendeurs par ordre décroissant (HT) 
-  // + on ne garde que ceux dans la liste VENDORS_TO_DISPLAY
   const sortedSellers = Object.entries(bestSellers)
     .filter(([seller]) => VENDORS_TO_DISPLAY.includes(seller))
-    .sort((a, b) => b[1].montantHT - a[1].montantHT);
+    .sort((a, b) => b[1].montantTTC - a[1].montantTTC);
 
-  // Données Doughnut "bestSellers" 
   const bestSellersData = {
     labels: sortedSellers.map(([seller]) => seller),
     datasets: [
       {
-        label: "Meilleurs Vendeurs (HT)",
-        data: sortedSellers.map(([, { montantHT }]) => montantHT),
+        label: "Meilleurs Vendeurs",
+        data: sortedSellers.map(([, { montantTTC }]) => montantTTC),
         backgroundColor: [
           "#FF6384",
           "#36A2EB",
@@ -275,7 +242,20 @@ const StatisticsDashboard = () => {
           "#2FDE00",
           "#00A6B4",
           "#6800B4",
+          "#4BC0C0",
           "#F77825",
+          "#9966FF",
+          "#FF9F40",
+          "#B21FDE",
+        ],
+        borderColor: [
+          "#FF6384",
+          "#36A2EB",
+          "#FFCE56",
+          "#4BC0C0",
+          "#F77825",
+          "#9966FF",
+          "#FF9F40",
         ],
         borderWidth: 1,
         hoverOffset: 10,
@@ -283,24 +263,31 @@ const StatisticsDashboard = () => {
     ],
   };
 
-  // Options du Doughnut
   const options = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { display: false },
-      title: { display: false },
+      legend: {
+        display: false,
+      },
+      title: {
+        display: false,
+      },
       tooltip: {
         callbacks: {
           label: function (tooltipItem) {
             const seller = tooltipItem.label;
-            const dataSeller = bestSellers[seller];
-            const valHT = dataSeller ? dataSeller.montantHT : 0;
-            return `Montant HT: ${valHT.toFixed(2)} €`;
+            const montantHT = bestSellers[seller].montantHT;
+            return `Montant HT: ${new Intl.NumberFormat("fr-FR", {
+              style: "currency",
+              currency: "EUR",
+            }).format(montantHT)}`;
           },
         },
       },
-      datalabels: { display: false },
+      datalabels: {
+        display: false,
+      },
     },
     cutout: "70%",
     animation: {
@@ -311,25 +298,24 @@ const StatisticsDashboard = () => {
     },
   };
 
-  // Données Doughnut pour le vendeur sélectionné
-  let sellerData = null;
-  if (selectedSeller && bestSellers[selectedSeller]) {
-    const valHT = bestSellers[selectedSeller].montantHT;
-    sellerData = {
-      labels: ["Montant HT"],
-      datasets: [
-        {
-          label: selectedSeller,
-          data: [valHT],
-          backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56"],
-          borderWidth: 1,
-        },
-      ],
-    };
-  }
+  const backgroundImageUrl = "/public/dahboard.png"; // Remplacez par l'URL de votre image
 
-  // Image de fond
-  const backgroundImageUrl = "/public/dahboard.png"; // Mettez le chemin correct
+  // Prepare seller specific data
+  const sellerData =
+    selectedSeller && bestSellers[selectedSeller]
+      ? {
+          labels: ["Ventes"],
+          datasets: [
+            {
+              label: selectedSeller,
+              data: [bestSellers[selectedSeller].montantTTC],
+              backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56"],
+              borderColor: ["#FF6384", "#36A2EB", "#FFCE56"],
+              borderWidth: 1,
+            },
+          ],
+        }
+      : null;
 
   return (
     <div
@@ -348,22 +334,20 @@ const StatisticsDashboard = () => {
         style={{ backgroundColor: "rgba(0, 0, 0, 0.7)" }}
       >
         <div className="flex flex-col md:flex-row w-full space-y-4 md:space-y-0 md:space-x-4">
-          {/* Stats Vendeurs (HT) */}
+          {/* Stats Vendeurs */}
           <div className="md:w-1/2 flex flex-col space-y-4">
-            <h2 className="text-white text-3xl">Stats Vendeurs (HT)</h2>
-
-            {/* Sélecteur de filtre */}
+            <h2 className="text-white text-3xl">Stats Vendeurs</h2>
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               className="px-4 py-2 rounded-lg bg-gray-700 text-white mb-4"
             >
-              <option value="mois">Mois</option>
-              <option value="annee">Année</option>
-              <option value="personnalise">Personnalisé</option>
+              {["mois", "annee", "personnalise"].map((period) => (
+                <option key={period} value={period}>
+                  {period.charAt(0).toUpperCase() + period.slice(1)}
+                </option>
+              ))}
             </select>
-
-            {/* DatePicker pour mois / année / personnalisé */}
             {filter === "mois" && (
               <DatePicker
                 selected={selectedDate}
@@ -409,53 +393,50 @@ const StatisticsDashboard = () => {
               </>
             )}
 
-            {/* Liste des vendeurs triés par HT */}
+            {/* Display Sales Data */}
             <div className="bg-gray-800 p-4 rounded-lg shadow-lg">
-              <h3 className="text-white text-xl mb-4">Meilleurs Vendeurs (HT)</h3>
+              <h3 className="text-white text-xl mb-4">Données des Vendeurs</h3>
               <ul className="space-y-2 text-white">
-                {sortedSellers.map(([seller, { montantHT, count }]) => (
+                {sortedSellers.map(([seller, { montantTTC, count }]) => (
                   <li
                     key={seller}
                     className="flex justify-between cursor-pointer"
                     onClick={() => setSelectedSeller(seller)}
                   >
                     <span>{seller}</span>
-                    <span>
-                      {`#Ventes: ${Math.round(count)} | HT: ${montantHT.toFixed(2)} €`}
-                    </span>
+                    <span>{`Ventes: ${Math.round(
+                      count
+                    )}, CA: ${montantTTC.toFixed(0)} €`}</span>
                   </li>
                 ))}
               </ul>
             </div>
           </div>
 
-          {/* Stats globales Agence + Doughnut */}
+          {/* Stats Agence */}
           <div className="md:w-1/2 flex flex-col space-y-4">
-            <h2 className="text-white text-3xl">Stats Agence (HT)</h2>
-
+            <h2 className="text-white text-3xl">Stats Agence</h2>
             <div className="bg-gray-800 p-4 rounded-lg shadow-lg">
-              <h3 className="text-white text-xl mb-4">Global Agence (HT)</h3>
+              <h3 className="text-white text-xl mb-4">
+                Données de l&apos;Agence
+              </h3>
               <ul className="space-y-2 text-white">
                 <li>Nombre de ventes: {agencyStats.totalCount}</li>
-                <li>CA total HT: {agencyStats.totalHT.toFixed(2)} €</li>
                 <li>
-                  Moyenne par vente:{" "}
-                  {agencyStats.totalCount > 0
-                    ? (agencyStats.totalHT / agencyStats.totalCount).toFixed(2)
-                    : 0}{" "}
-                  €
+                  Chiffre d&apos;affaires total: {agencyStats.totalSales.toFixed(0)} €
+                </li>
+                <li>
+                  Moyenne des ventes:{" "}
+                  {(agencyStats.totalSales / agencyStats.totalCount).toFixed(2)} €
                 </li>
               </ul>
             </div>
-
-            {/* Doughnut "best sellers" */}
             <div className="flex justify-center items-center mt-4">
-              <div className="relative" style={{ width: "300px", height: "300px" }}>
+              <div className="relative">
                 <Doughnut data={bestSellersData} options={options} />
-                {/* Centre du doughnut */}
                 <div className="absolute inset-0 flex justify-center items-center">
                   <span className="text-white text-xl font-bold">
-                    Total {totalHT.toFixed(2)} €
+                    Total {totalSales.toFixed(0)} €
                   </span>
                 </div>
               </div>
@@ -463,36 +444,27 @@ const StatisticsDashboard = () => {
           </div>
         </div>
 
-        {/* Modale pour le vendeur sélectionné */}
-        {selectedSeller && bestSellers[selectedSeller] && (
+        {/* Seller Stats Modal */}
+        {selectedSeller && (
           <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
             <div className="bg-white p-4 rounded-lg shadow-lg max-w-md w-full">
               <h3 className="text-black text-xl mb-4">
-                {selectedSeller === bestSeller ? "Félicitations ! " : ""}
-                Statistiques (HT) de {selectedSeller}
+                {selectedSeller === bestSeller ? "Félicitations! " : ""}
+                Statistiques de {selectedSeller}
               </h3>
+              <p>CA: {bestSellers[selectedSeller].montantTTC.toFixed(0)} €</p>
               <p>
-                CA HT: {bestSellers[selectedSeller].montantHT.toFixed(2)} €
+                Nombre de ventes:{" "}
+                {Math.round(bestSellers[selectedSeller].count)}
               </p>
-              <p>Nombre de ventes: {Math.round(bestSellers[selectedSeller].count)}</p>
-
-              {/* Petit doughnut perso pour ce vendeur */}
               <div className="mb-4 h-40 w-full">
-                <Doughnut
-                  data={{
-                    labels: ["Montant HT"],
-                    datasets: [
-                      {
-                        label: selectedSeller,
-                        data: [bestSellers[selectedSeller].montantHT],
-                        backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56"],
-                      },
-                    ],
-                  }}
-                  options={{ ...options, cutout: "50%" }}
-                />
+                {sellerData && (
+                  <Doughnut
+                    data={sellerData}
+                    options={{ ...options, cutout: "50%" }}
+                  />
+                )}
               </div>
-
               <button
                 className="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg"
                 onClick={() => setSelectedSeller(null)}
