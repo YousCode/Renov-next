@@ -5,12 +5,9 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSave, faFile, faCopy, faDownload } from "@fortawesome/free-solid-svg-icons";
-
-// 1) Import de react-datepicker et son CSS
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
-// Taux de TVA par défaut
 const TVA_RATE_DEFAULT = 0.2;
 
 /**
@@ -27,19 +24,17 @@ function formatDateDDMMYYYY(dateObj) {
 /**
  * parseDateString("05/09/2023") => Date(2023, 8, 5)
  * parseDateString("2023-09-05T12:00:00Z") => Date(2023,8,5,12,0,0)
+ * parseDateString("2023-09-05") => Date(2023,8,5)
  */
 function parseDateString(str) {
   if (!str) return null;
-  // Cas format ISO ou "yyyy-mm-dd"
   if (str.includes("T") || /^\d{4}-\d{2}-\d{2}/.test(str)) {
     return new Date(str);
   }
-  // Cas "dd/mm/yyyy"
   if (str.includes("/")) {
     const [jour, mois, annee] = str.split("/");
     return new Date(Number(annee), Number(mois) - 1, Number(jour));
   }
-  // Fallback => new Date() (now)
   return new Date();
 }
 
@@ -47,53 +42,50 @@ const EditSale = () => {
   const { id } = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const saleDateParam = searchParams.get("date"); // ?date=...
+  const saleDateParam = searchParams.get("date");
 
   const [sale, setSale] = useState(null);
+  const [saleDate, setSaleDate] = useState(null);
+  const [prevChantierDate, setPrevChantierDate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
 
-  // états date
-  const [saleDate, setSaleDate] = useState(null);
-  const [prevChantierDate, setPrevChantierDate] = useState(null);
+  // Champs à exclure du CSV
+  const excludedFields = ["_id", "createdAt", "updatedAt", "__v"];
 
-  // --------------------------------------------------
+  // --------------------------------------------------------------------
   // Récupération de la vente
-  // --------------------------------------------------
+  // --------------------------------------------------------------------
   useEffect(() => {
     const fetchSale = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/ventes/${id}`, {
-          credentials: "include",
-        });
-        if (!response.ok) {
-          throw new Error(`Échec de la récupération : ${response.status}`);
+        const res = await fetch(`/api/ventes/${id}`, { credentials: "include" });
+        if (!res.ok) {
+          throw new Error(`Échec de la récupération : ${res.status}`);
         }
-        const data = await response.json();
+        const data = await res.json();
         const vente = data.data;
 
-        // 1) date de vente
+        // Date de Vente
         if (vente["DATE DE VENTE"]) {
           setSaleDate(parseDateString(vente["DATE DE VENTE"]));
         } else {
-          // si non défini, on essaie ?date=..., sinon on met la date du jour
           if (saleDateParam) {
             setSaleDate(parseDateString(saleDateParam));
           } else {
-            setSaleDate(new Date()); // date du jour
+            setSaleDate(new Date());
           }
         }
 
-        // 2) Prévision Chantier
+        // Prévision Chantier
         if (vente["PREVISION CHANTIER"]) {
           setPrevChantierDate(parseDateString(vente["PREVISION CHANTIER"]));
         }
 
         setSale(vente);
       } catch (err) {
-        console.error("Erreur :", err);
         setError(`Erreur : ${err.message}`);
       } finally {
         setLoading(false);
@@ -102,39 +94,40 @@ const EditSale = () => {
     fetchSale();
   }, [id, saleDateParam]);
 
-  // --------------------------------------------------
-  // handleInputChange : champs texte / number
-  // --------------------------------------------------
-  const handleInputChange = (event) => {
-    const { name, value } = event.target;
+  // --------------------------------------------------------------------
+  // handleInputChange
+  // --------------------------------------------------------------------
+  const handleInputChange = (e) => {
+    if (!sale) return;
 
+    const { name, value } = e.target;
     setSale((prev) => {
       const updated = { ...prev, [name]: value };
 
-      // Recalcul MONTANT HT si Taux TVA / MONTANT TTC changent
+      // Recalcul MONTANT HT si "MONTANT TTC" ou "TAUX TVA" changent
       if (name === "MONTANT TTC" || name === "TAUX TVA") {
         const montantTTC = parseFloat(updated["MONTANT TTC"]) || 0;
-        let tauxTVA = parseFloat(updated["TAUX TVA"]) || TVA_RATE_DEFAULT;
-        // Par exemple, "5.5" → 0.055, "10" → 0.1
-        if (tauxTVA > 1) {
-          tauxTVA = tauxTVA / 100;
-        }
-        const ht = montantTTC / (1 + tauxTVA);
+
+        // On suppose que la "TAUX TVA" est stockée sous forme de pourcentage (5.5, 10, 20, etc.)
+        let tvaPourcent = parseFloat(updated["TAUX TVA"]) || TVA_RATE_DEFAULT * 100; 
+        // ex: "10" => 10 => tvaDecimal = 0.1
+        const tvaDecimal = tvaPourcent / 100; 
+
+        const ht = montantTTC / (1 + tvaDecimal);
         updated["MONTANT HT"] = ht > 0 ? ht.toFixed(2) : "0.00";
       }
-
       return updated;
     });
   };
 
-  // --------------------------------------------------
+  // --------------------------------------------------------------------
   // Sauvegarde
-  // --------------------------------------------------
+  // --------------------------------------------------------------------
   const handleSave = async (e) => {
     e.preventDefault();
     if (!sale) return;
 
-    // Contrôle de champs obligatoires
+    // Champs obligatoires
     const required = ["NOM DU CLIENT", "prenom", "ADRESSE DU CLIENT"];
     const missing = required.filter((f) => !sale[f]);
     if (missing.length > 0) {
@@ -145,25 +138,22 @@ const EditSale = () => {
       return;
     }
 
-    // Convertit les DatePicker => "dd/MM/yyyy"
-    const dateVenteStr = saleDate ? formatDateDDMMYYYY(saleDate) : "";
-    const prevChantierStr = prevChantierDate
+    // Convertit les DatePickers => format "dd/MM/yyyy"
+    sale["DATE DE VENTE"] = saleDate ? formatDateDDMMYYYY(saleDate) : "";
+    sale["PREVISION CHANTIER"] = prevChantierDate
       ? formatDateDDMMYYYY(prevChantierDate)
       : "";
 
-    sale["DATE DE VENTE"] = dateVenteStr;
-    sale["PREVISION CHANTIER"] = prevChantierStr;
-
     try {
-      const response = await fetch(`/api/ventes/${id}`, {
+      const res = await fetch(`/api/ventes/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify(sale),
       });
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.message || `Erreur : ${response.status}`);
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || `Erreur : ${res.status}`);
       }
 
       setNotification({
@@ -174,19 +164,13 @@ const EditSale = () => {
         router.back();
       }, 1500);
     } catch (err) {
-      console.error("Erreur lors de la sauvegarde :", err.message);
-      setNotification({
-        type: "error",
-        message: `Erreur : ${err.message}`,
-      });
+      setNotification({ type: "error", message: `Erreur : ${err.message}` });
     }
   };
 
-  // --------------------------------------------------
+  // --------------------------------------------------------------------
   // CSV
-  // --------------------------------------------------
-  const excludedFields = ["_id", "createdAt", "updatedAt", "__v"];
-
+  // --------------------------------------------------------------------
   const handleCopyCSV = () => {
     if (!sale) return;
     const entries = Object.entries(sale).filter(([k]) => !excludedFields.includes(k));
@@ -228,9 +212,9 @@ const EditSale = () => {
     router.push(`/file/details/${saleId}`);
   };
 
-  // --------------------------------------------------
+  // --------------------------------------------------------------------
   // ÉTATS DE CHARGEMENT
-  // --------------------------------------------------
+  // --------------------------------------------------------------------
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -249,6 +233,7 @@ const EditSale = () => {
 
   // Valeurs par défaut
   const defaultSale = {
+    NUMERO_BC: "",
     CIVILITE: "",
     "NOM DU CLIENT": "",
     prenom: "",
@@ -259,7 +244,7 @@ const EditSale = () => {
     TELEPHONE: "",
     VENDEUR: "",
     DESIGNATION: "",
-    "TAUX TVA": "10", // par défaut "10", => 0.1
+    "TAUX TVA": "10", // => 10% => 0.1
     "MONTANT HT": "",
     "MONTANT TTC": "",
     "MONTANT ANNULE": "",
@@ -308,6 +293,20 @@ const EditSale = () => {
               />
             </div>
 
+            {/* NUMERO_BC */}
+            <div>
+              <label className="block text-gray-800 font-semibold mb-2">
+                NUMERO BC
+              </label>
+              <input
+                type="text"
+                name="NUMERO_BC"
+                value={currentSale.NUMERO_BC}
+                onChange={handleInputChange}
+                className="border border-gray-300 p-2 rounded-md w-full"
+              />
+            </div>
+
             {/* CIVILITE */}
             <div>
               <label className="block text-gray-800 font-semibold mb-2">
@@ -316,7 +315,7 @@ const EditSale = () => {
               <input
                 type="text"
                 name="CIVILITE"
-                value={currentSale.CIVILITE || ""}
+                value={currentSale.CIVILITE}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
               />
@@ -330,7 +329,7 @@ const EditSale = () => {
               <input
                 type="text"
                 name="NOM DU CLIENT"
-                value={currentSale["NOM DU CLIENT"] || ""}
+                value={currentSale["NOM DU CLIENT"]}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
                 required
@@ -345,7 +344,7 @@ const EditSale = () => {
               <input
                 type="text"
                 name="prenom"
-                value={currentSale.prenom || ""}
+                value={currentSale.prenom}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
                 required
@@ -360,7 +359,7 @@ const EditSale = () => {
               <input
                 type="text"
                 name="ADRESSE DU CLIENT"
-                value={currentSale["ADRESSE DU CLIENT"] || ""}
+                value={currentSale["ADRESSE DU CLIENT"]}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
                 required
@@ -375,7 +374,7 @@ const EditSale = () => {
               <input
                 type="text"
                 name="CODE INTERP etage"
-                value={currentSale["CODE INTERP etage"] || ""}
+                value={currentSale["CODE INTERP etage"]}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
               />
@@ -389,7 +388,7 @@ const EditSale = () => {
               <input
                 type="text"
                 name="VILLE"
-                value={currentSale.VILLE || ""}
+                value={currentSale.VILLE}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
               />
@@ -403,7 +402,7 @@ const EditSale = () => {
               <input
                 type="text"
                 name="CP"
-                value={currentSale.CP || ""}
+                value={currentSale.CP}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
               />
@@ -417,7 +416,7 @@ const EditSale = () => {
               <input
                 type="text"
                 name="TELEPHONE"
-                value={currentSale.TELEPHONE || ""}
+                value={currentSale.TELEPHONE}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
               />
@@ -431,7 +430,7 @@ const EditSale = () => {
               <input
                 type="text"
                 name="VENDEUR"
-                value={currentSale.VENDEUR || ""}
+                value={currentSale.VENDEUR}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
               />
@@ -445,7 +444,7 @@ const EditSale = () => {
               <input
                 type="text"
                 name="DESIGNATION"
-                value={currentSale.DESIGNATION || ""}
+                value={currentSale.DESIGNATION}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
               />
@@ -454,11 +453,11 @@ const EditSale = () => {
             {/* TAUX TVA */}
             <div>
               <label className="block text-gray-800 font-semibold mb-2">
-                TAUX TVA
+                TAUX TVA (%)
               </label>
               <select
                 name="TAUX TVA"
-                value={currentSale["TAUX TVA"] || ""}
+                value={currentSale["TAUX TVA"]}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
               >
@@ -477,7 +476,7 @@ const EditSale = () => {
               <input
                 type="text"
                 name="MONTANT HT"
-                value={currentSale["MONTANT HT"] || ""}
+                value={currentSale["MONTANT HT"]}
                 readOnly
                 className="border border-gray-300 p-2 rounded-md w-full bg-gray-100 cursor-not-allowed"
               />
@@ -491,7 +490,7 @@ const EditSale = () => {
               <input
                 type="number"
                 name="MONTANT TTC"
-                value={currentSale["MONTANT TTC"] || ""}
+                value={currentSale["MONTANT TTC"]}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
                 step="0.01"
@@ -507,7 +506,7 @@ const EditSale = () => {
               <input
                 type="number"
                 name="MONTANT ANNULE"
-                value={currentSale["MONTANT ANNULE"] || ""}
+                value={currentSale["MONTANT ANNULE"]}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
                 step="0.01"
@@ -522,7 +521,7 @@ const EditSale = () => {
               </label>
               <select
                 name="ETAT"
-                value={currentSale.ETAT || ""}
+                value={currentSale.ETAT}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
               >
@@ -554,7 +553,7 @@ const EditSale = () => {
               <input
                 type="text"
                 name="OBSERVATION"
-                value={currentSale.OBSERVATION || ""}
+                value={currentSale.OBSERVATION}
                 onChange={handleInputChange}
                 className="border border-gray-300 p-2 rounded-md w-full"
               />
