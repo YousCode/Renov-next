@@ -2,23 +2,22 @@
 import React, { useState, useEffect } from "react";
 import { toast, Toaster } from "react-hot-toast";
 import { useSelector } from "react-redux";
-import { useTranslation } from "react-i18next";
 import API from "@/services/api";
 import Navbar from "@/components/Navbar";
 
 const AccountPage = () => {
-  const { t } = useTranslation();
-  const i18n = useTranslation().i18n;
+  // 1. Retrait de `useTranslation()` et de toute référence à i18n
+  // const { t } = useTranslation(); // <-- Supprimé
+
   const [values, setValues] = useState({
     name: "",
     email: "",
     language: "",
     password: "",
-    confirmPassword: ""
+    confirmPassword: "",
   });
 
   const user = useSelector((state) => state.Auth.user);
-  //   console.log("User from Redux:", user);
 
   useEffect(() => {
     if (user) {
@@ -26,7 +25,7 @@ const AccountPage = () => {
         ...prevValues,
         name: user.name || "",
         email: user.email || "",
-        language: user.language || ""
+        language: user.language || "",
       }));
     }
   }, [user]);
@@ -35,9 +34,8 @@ const AccountPage = () => {
     const { name, value } = e.target;
     setValues((prevValues) => ({
       ...prevValues,
-      [name]: value
+      [name]: value,
     }));
-    // console.log("Updated values:", values);
   };
 
   const handleSubmit = async (e) => {
@@ -50,19 +48,21 @@ const AccountPage = () => {
       toast.error("Les mots de passe ne correspondent pas");
       return;
     }
+
     try {
       const response = await API.put(`/api/auth/${user._id}`, values);
       const { ok } = response.data;
       if (ok) {
-        if (typeof i18n.changeLanguage === 'function') {
-          i18n.changeLanguage(values.language);
-        }
+        // 2. Plus de changement de langue avec i18n, puisque i18n est retiré
+        // if (typeof i18n.changeLanguage === 'function') {
+        //   i18n.changeLanguage(values.language);
+        // }
         toast.success("Votre compte a bien été mis à jour");
       } else {
-        toast.error("Failed to update account", response.data);
+        toast.error("Échec de la mise à jour du compte");
       }
     } catch (error) {
-      toast.error("Error updating account");
+      toast.error("Erreur lors de la mise à jour du compte");
     }
   };
 
@@ -74,9 +74,7 @@ const AccountPage = () => {
       <div className="p-6 max-w-5xl w-full mx-auto rounded-lg">
         <Toaster />
         <section className="relative">
-          <h2 className="text-2xl font-bold text-white mb-4">
-            Mon compte
-          </h2>
+          <h2 className="text-2xl font-bold text-white mb-4">Mon compte</h2>
           <form
             className="grid grid-cols-2 gap-x-2.5 gap-y-4"
             onSubmit={handleSubmit}
@@ -114,13 +112,12 @@ const AccountPage = () => {
               />
             </div>
 
-
             <div className="space-y-1">
               <label
                 className="text-xxs font-bold text-details-secondary block"
                 htmlFor="password"
               >
-              Mot de passe
+                Mot de passe
               </label>
               <input
                 type="password"
@@ -138,7 +135,7 @@ const AccountPage = () => {
                 className="text-xxs font-bold text-details-secondary block"
                 htmlFor="confirmPassword"
               >
-              Confirmez votre mot de passe
+                Confirmez votre mot de passe
               </label>
               <input
                 type="password"
@@ -161,7 +158,6 @@ const AccountPage = () => {
         </section>
       </div>
     </div>
-
   );
 };
 

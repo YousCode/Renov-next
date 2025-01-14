@@ -1,39 +1,41 @@
 "use client";
+
 import { Fragment, useState } from "react";
 import { Menu, Transition } from "@headlessui/react";
 import Link from "next/link";
 import { useDispatch } from "react-redux";
-import { useTranslation } from "react-i18next";
-import axios from 'axios';
-import { useRouter } from 'next/navigation';
-import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
+import axios from "axios";
+import { useRouter } from "next/navigation";
+import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
+
+// À supprimer si vous ne l’utilisez pas dans votre Redux store
+// import { logoutUser } from "../path/to/authSlice";
 
 export const Navbar = () => {
-  const { t } = useTranslation();
   const dispatch = useDispatch();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navMenu = [
-    { name: "Acceuil", path: "/dashboard" },
-    { name: "Chercher Clients", path: "/explorer", beta: true },
+    { name: "Accueil", path: "/dashboard" },
+    { name: "Chercher Clients", path: "/explorer" },
     { name: "Statistiques", path: "/statistics" },
   ];
 
   async function logout() {
     try {
-      await axios.post('/api/auth/logout');
-      dispatch(logoutUser());
-      router.push('/');
+      await axios.post("/api/auth/logout");
+      // dispatch(logoutUser()); // si vous avez une action Redux "logoutUser"
+      router.push("/");
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error("Logout failed:", error);
     }
   }
 
   return (
     <nav className="bg-gradient-to-r from-[#7db86e] to-[#7db86e] font-garamond">
-      <div className="container  flex items-center justify-between py-4 px-6 lg:px-12">
-        {/* Mobile Menu Button */}
+      <div className="container flex items-center justify-between py-4 px-6 lg:px-12">
+        {/* Bouton menu mobile */}
         <div className="lg:hidden flex items-center">
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -47,7 +49,7 @@ export const Navbar = () => {
           </button>
         </div>
 
-        {/* Navigation Links */}
+        {/* Liens de navigation */}
         <div className="hidden lg:flex items-center space-x-4">
           {navMenu.map((item, index) => (
             <Link key={index} href={item.path}>
@@ -59,24 +61,16 @@ export const Navbar = () => {
         </div>
 
         {/* Logo */}
-        <div className="flex items-center justify-center ">
-          <img
-            src="/logo.png"
-            alt="Logo"
-            className="h-12 mr-20 pr-10"
-          />
+        <div className="flex items-center justify-center">
+          <img src="/logo.png" alt="Logo" className="h-12 mr-20 pr-10" />
         </div>
 
-        {/* User Menu */}
+        {/* Menu utilisateur */}
         <div className="hidden lg:flex items-center space-x-4">
           <Menu as="div" className="relative inline-block text-left z-50">
             <div>
               <Menu.Button className="w-9 h-9 rounded-full flex items-center justify-center">
-                <img
-                  src="/avatar.png"
-                  className="w-9 h-9 rounded-full"
-                  alt="Avatar"
-                />
+                <img src="/avatar.png" className="w-9 h-9 rounded-full" alt="Avatar" />
               </Menu.Button>
             </div>
             <Transition
@@ -92,15 +86,25 @@ export const Navbar = () => {
                 <div className="px-1 py-1">
                   <Menu.Item>
                     {({ active }) => (
-                      <Link href="/account" className={`${active ? "bg-green-700" : ""} group flex w-full items-center rounded-md px-2 py-1 text-white transition-colors text-sm font-semibold`}>
-                        {t("menu.account")}
+                      <Link
+                        href="/account"
+                        className={`${
+                          active ? "bg-green-700" : ""
+                        } group flex w-full items-center rounded-md px-2 py-1 text-white transition-colors text-sm font-semibold`}
+                      >
+                        Mon compte
                       </Link>
                     )}
                   </Menu.Item>
                   <Menu.Item>
                     {({ active }) => (
-                      <button className={`${active ? "bg-green-700" : ""} group flex w-full items-center rounded-md px-2 py-1 text-white transition-colors text-sm font-semibold`} onClick={logout}>
-                        {t("menu.sign_out")}
+                      <button
+                        onClick={logout}
+                        className={`${
+                          active ? "bg-green-700" : ""
+                        } group flex w-full items-center rounded-md px-2 py-1 text-white transition-colors text-sm font-semibold`}
+                      >
+                        Se déconnecter
                       </button>
                     )}
                   </Menu.Item>
@@ -111,7 +115,7 @@ export const Navbar = () => {
         </div>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Menu mobile */}
       <Transition
         show={mobileMenuOpen}
         enter="transition ease-out duration-200"

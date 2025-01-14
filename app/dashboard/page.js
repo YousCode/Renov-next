@@ -2,15 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
-import { useTranslation } from "react-i18next";
-import axios from "axios";
+
 import { useRouter } from 'next/navigation';
 import Navbar from "@/components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCalendarAlt, faSearch, faChartBar } from "@fortawesome/free-solid-svg-icons";
 
 const Dashboard = () => {
-  const { t } = useTranslation();
   const user = useSelector((state) => state.auth ? state.auth.user : null);
   const [statusFilterCalendar, setStatusFilterCalendar] = useState(t("task.todo"));
   const [assignedToFilterCalendar, setAssignedToFilterCalendar] = useState({ name: '', value: '' });
