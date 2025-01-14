@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
-
 import { useRouter } from 'next/navigation';
 import Navbar from "@/components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -10,9 +9,12 @@ import { faCalendarAlt, faSearch, faChartBar } from "@fortawesome/free-solid-svg
 
 const Dashboard = () => {
   const user = useSelector((state) => state.auth ? state.auth.user : null);
-  const [statusFilterCalendar, setStatusFilterCalendar] = useState(t("task.todo"));
+
+  // On retire la référence à t("…"), en mettant directement les chaînes
+  const [statusFilterCalendar, setStatusFilterCalendar] = useState("À faire");
   const [assignedToFilterCalendar, setAssignedToFilterCalendar] = useState({ name: '', value: '' });
-  const [projectFilterCalendar, setProjectFilterCalendar] = useState({ name: t("dashboard.all_projects"), value: "all" });
+  const [projectFilterCalendar, setProjectFilterCalendar] = useState({ name: "Tous projets", value: "all" });
+
   const router = useRouter();
 
   useEffect(() => {
@@ -26,7 +28,10 @@ const Dashboard = () => {
   return (
     <>
       <Navbar />
-      <section className="flex flex-col items-center justify-center min-h-screen bg-cover bg-center" style={{ backgroundImage: "url('/explore-bg.png')" }}>
+      <section
+        className="flex flex-col items-center justify-center min-h-screen bg-cover bg-center"
+        style={{ backgroundImage: "url('/explore-bg.png')" }}
+      >
         <div className="z-10 p-4 w-full max-w-screen-md mx-auto space-y-10">
           {/* Section Planning */}
           <div
