@@ -6,8 +6,7 @@ import API from "@/services/api";
 import Navbar from "@/components/Navbar";
 
 const AccountPage = () => {
-  // 1. Retrait de `useTranslation()` et de toute référence à i18n
-  // const { t } = useTranslation(); // <-- Supprimé
+ 
 
   const [values, setValues] = useState({
     name: "",

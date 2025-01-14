@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 
 const DesktopMenu = ({ navMenu }) => {
-  const { t } = useTranslation();
+
   return (
     <ul className="lg:flex hidden items-center gap-6">
       {navMenu.map((item, index) => (

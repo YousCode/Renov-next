@@ -4,7 +4,6 @@ import { Inter } from "next/font/google";
 import ReduxProvider from './ReduxProvider'; // Assurez-vous que le chemin est correct
 import ClientProvider from '../components/ClientProvider'; // Assurez-vous que le chemin est correct
 import './globals.css';
-// import '../i18n'; // Importez votre configuration i18n
 
 const inter = Inter({ subsets: ["latin"] });
 
