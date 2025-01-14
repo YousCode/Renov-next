@@ -11,12 +11,10 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
 // Taux de TVA par défaut
-const TVA_RATE_DEFAULT = 20;
+const TVA_RATE_DEFAULT = 0.2;
 
 /**
  * Convertit un objet Date JavaScript en string "dd/MM/yyyy"
- * @param {Date} dateObj
- * @returns {string} ex: "05/09/2023"
  */
 function formatDateDDMMYYYY(dateObj) {
   if (!(dateObj instanceof Date)) return "";
@@ -29,11 +27,10 @@ function formatDateDDMMYYYY(dateObj) {
 /**
  * parseDateString("05/09/2023") => Date(2023, 8, 5)
  * parseDateString("2023-09-05T12:00:00Z") => Date(2023,8,5,12,0,0)
- * Gère différents formats
  */
 function parseDateString(str) {
   if (!str) return null;
-  // Cas format ISO ou string commençant par yyyy-mm-dd
+  // Cas format ISO ou "yyyy-mm-dd"
   if (str.includes("T") || /^\d{4}-\d{2}-\d{2}/.test(str)) {
     return new Date(str);
   }
@@ -42,7 +39,7 @@ function parseDateString(str) {
     const [jour, mois, annee] = str.split("/");
     return new Date(Number(annee), Number(mois) - 1, Number(jour));
   }
-  // Sinon, fallback => new Date() (now)
+  // Fallback => new Date() (now)
   return new Date();
 }
 
@@ -55,17 +52,14 @@ const EditSale = () => {
   const [sale, setSale] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   const [notification, setNotification] = useState(null);
 
-  // 2) On gère deux états date (type Date) côté client :
-  //    - date de vente
-  //    - prévision chantier
+  // états date
   const [saleDate, setSaleDate] = useState(null);
   const [prevChantierDate, setPrevChantierDate] = useState(null);
 
   // --------------------------------------------------
-  //  fetchSale : récupération de la vente
+  // Récupération de la vente
   // --------------------------------------------------
   useEffect(() => {
     const fetchSale = async () => {
@@ -78,24 +72,21 @@ const EditSale = () => {
           throw new Error(`Échec de la récupération : ${response.status}`);
         }
         const data = await response.json();
-
         const vente = data.data;
 
-        // 1) Si ?date=... (format "dd/MM/yyyy" ou autre) => on l'applique à la "Date de Vente"
-        if (saleDateParam) {
-          setSaleDate(parseDateString(saleDateParam));
-          vente["DATE DE VENTE"] = saleDateParam;
+        // 1) date de vente
+        if (vente["DATE DE VENTE"]) {
+          setSaleDate(parseDateString(vente["DATE DE VENTE"]));
         } else {
-          // Sinon, si la DB n'a pas "DATE DE VENTE", on met la date du jour
-          if (!vente["DATE DE VENTE"]) {
-            const now = new Date();
-            setSaleDate(now);
+          // si non défini, on essaie ?date=..., sinon on met la date du jour
+          if (saleDateParam) {
+            setSaleDate(parseDateString(saleDateParam));
           } else {
-            setSaleDate(parseDateString(vente["DATE DE VENTE"]));
+            setSaleDate(new Date()); // date du jour
           }
         }
 
-        // 2) Prévision Chantier : parse le champ si présent
+        // 2) Prévision Chantier
         if (vente["PREVISION CHANTIER"]) {
           setPrevChantierDate(parseDateString(vente["PREVISION CHANTIER"]));
         }
@@ -108,15 +99,15 @@ const EditSale = () => {
         setLoading(false);
       }
     };
-
     fetchSale();
   }, [id, saleDateParam]);
 
   // --------------------------------------------------
-  // handleInputChange : pour les autres champs (texte / number)
+  // handleInputChange : champs texte / number
   // --------------------------------------------------
   const handleInputChange = (event) => {
     const { name, value } = event.target;
+
     setSale((prev) => {
       const updated = { ...prev, [name]: value };
 
@@ -124,6 +115,7 @@ const EditSale = () => {
       if (name === "MONTANT TTC" || name === "TAUX TVA") {
         const montantTTC = parseFloat(updated["MONTANT TTC"]) || 0;
         let tauxTVA = parseFloat(updated["TAUX TVA"]) || TVA_RATE_DEFAULT;
+        // Par exemple, "5.5" → 0.055, "10" → 0.1
         if (tauxTVA > 1) {
           tauxTVA = tauxTVA / 100;
         }
@@ -136,13 +128,13 @@ const EditSale = () => {
   };
 
   // --------------------------------------------------
-  // handleSave : sauvegarde
+  // Sauvegarde
   // --------------------------------------------------
   const handleSave = async (e) => {
     e.preventDefault();
     if (!sale) return;
 
-    // Vérifier des champs obligatoires
+    // Contrôle de champs obligatoires
     const required = ["NOM DU CLIENT", "prenom", "ADRESSE DU CLIENT"];
     const missing = required.filter((f) => !sale[f]);
     if (missing.length > 0) {
@@ -153,13 +145,12 @@ const EditSale = () => {
       return;
     }
 
-    // 1) On convertit nos DatePicker en "dd/MM/yyyy" (ou ISO si vous voulez)
+    // Convertit les DatePicker => "dd/MM/yyyy"
     const dateVenteStr = saleDate ? formatDateDDMMYYYY(saleDate) : "";
     const prevChantierStr = prevChantierDate
       ? formatDateDDMMYYYY(prevChantierDate)
       : "";
 
-    // On stocke ces formats dans l’objet sale
     sale["DATE DE VENTE"] = dateVenteStr;
     sale["PREVISION CHANTIER"] = prevChantierStr;
 
@@ -233,9 +224,6 @@ const EditSale = () => {
     document.body.removeChild(a);
   };
 
-  // --------------------------------------------------
-  // Page "Fichier"
-  // --------------------------------------------------
   const handleFileAction = (saleId) => {
     router.push(`/file/details/${saleId}`);
   };
@@ -271,7 +259,7 @@ const EditSale = () => {
     TELEPHONE: "",
     VENDEUR: "",
     DESIGNATION: "",
-    "TAUX TVA": "5.5",
+    "TAUX TVA": "10", // par défaut "10", => 0.1
     "MONTANT HT": "",
     "MONTANT TTC": "",
     "MONTANT ANNULE": "",
@@ -281,11 +269,8 @@ const EditSale = () => {
   };
   const currentSale = { ...defaultSale, ...sale };
 
-  // --------------------------------------------------
-  // RENDU
-  // --------------------------------------------------
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-200 to-grey-600">
+    <div className="min-h-screen bg-gradient-to-br from-green-200 to-gray-600">
       <Navbar />
 
       <div className="max-w-5xl mx-auto py-8 px-4">
@@ -310,15 +295,15 @@ const EditSale = () => {
           className="bg-white bg-opacity-90 rounded-lg shadow-2xl p-6"
         >
           <div className="grid grid-cols-2 gap-6">
-            {/* ---- Date de Vente ---- */}
+            {/* Date de Vente */}
             <div>
               <label className="block text-gray-800 font-semibold mb-2">
                 Date de Vente
               </label>
               <DatePicker
-                selected={saleDate}               // état local (type Date)
-                onChange={(date) => setSaleDate(date)} 
-                dateFormat="dd/MM/yyyy"            // affichage
+                selected={saleDate}
+                onChange={(date) => setSaleDate(date)}
+                dateFormat="dd/MM/yyyy"
                 className="border border-gray-300 p-2 rounded-md w-full"
               />
             </div>
@@ -480,7 +465,7 @@ const EditSale = () => {
                 <option value="5.5">5.5%</option>
                 <option value="10">10%</option>
                 <option value="20">20%</option>
-                <option value="Autre">Autre</option>
+                <option value="0">0%</option>
               </select>
             </div>
 
@@ -548,7 +533,7 @@ const EditSale = () => {
               </select>
             </div>
 
-            {/* ---- Prévision Chantier ---- */}
+            {/* Prévision Chantier */}
             <div>
               <label className="block text-gray-800 font-semibold mb-2">
                 Prévision Chantier
