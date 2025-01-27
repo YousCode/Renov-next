@@ -16,7 +16,6 @@ import {
 import Confetti from "react-confetti";
 import useWindowSize from "react-use/lib/useWindowSize";
 
-const normalizeString = (str) => {
 /**
  * Removes accents and diacritics from a string,
  * e.g. "é" => "e", "ç" => "c".
