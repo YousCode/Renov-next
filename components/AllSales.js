@@ -17,19 +17,31 @@ import Confetti from "react-confetti";
 import useWindowSize from "react-use/lib/useWindowSize";
 
 const normalizeString = (str) => {
-  return str
+/**
+ * Removes accents and diacritics from a string,
+ * e.g. "é" => "e", "ç" => "c".
+ */
+const normalizeString = (str) =>
+  str
     ? str
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
     : "";
-};
 
+/** 
+ * Converts a date string into "dd/mm/yyyy" (French locale).
+ * If the value is invalid, returns an empty string.
+ */
 const formatDate = (dateStr) => {
   if (!dateStr) return "";
   const date = new Date(dateStr);
   return isNaN(date.getTime()) ? "" : date.toLocaleDateString("fr-FR");
 };
 
+/**
+ * Formats a numeric value as currency (EUR, French locale).
+ */
 const formatNumber = (value) => {
   const number = parseFloat(value);
   if (isNaN(number)) return value || "";
@@ -41,19 +53,9 @@ const formatNumber = (value) => {
   }).format(number);
 };
 
-const EXCLUDED_STATES = ["annule"];
-
-const isExcludedState = (etat) => {
-  if (!etat) return false;
-  const normalizedEtat = normalizeString(etat);
-  if (EXCLUDED_STATES.some((state) => normalizedEtat.startsWith(state))) {
-    return true;
-  }
-  const dvRegex = /^dv\s*\d+$/i;
-  const numberRegex = /^\d+$/;
-  return dvRegex.test(etat) || numberRegex.test(etat);
-};
-
+/** 
+ * Commission tiers for "BAREME COM": T1, T2, T3, T4, T5, T6.
+ */
 function calculateCommission(sale) {
   const caHT = parseFloat(sale["MONTANT HT"]) || 0;
   let percent = 0.1;
@@ -82,6 +84,9 @@ function calculateCommission(sale) {
   return (caHT * percent).toFixed(2);
 }
 
+/**
+ * Returns a background color for the row, based on "BAREME COM".
+ */
 function getBaremeBgColor(bareme) {
   switch (bareme) {
     case "T1":
@@ -101,6 +106,13 @@ function getBaremeBgColor(bareme) {
   }
 }
 
+/**
+ * Pre-process the fetched sales data:
+ * - ensures MONTANT TTC / MONTANT HT are consistent if "TAUX TVA" is valid
+ * - convert numeric TVA to "5,5%" style string
+ * - fill missing fields
+ * - deduplicate based on an identifier (so the same sale doesn't appear twice)
+ */
 const processSalesData = (salesData) => {
   const uniqueSales = [];
   const seen = new Set();
@@ -115,22 +127,21 @@ const processSalesData = (salesData) => {
 
       let montantHT = parseFloat(sale["MONTANT HT"]);
       let montantTTC = parseFloat(sale["MONTANT TTC"]);
-      let tauxTVA = parseFloat(sale["TAUX TVA"]); // Taux de TVA récupéré tel quel
+      let tauxTVA = parseFloat(sale["TAUX TVA"]);
 
-      // Validation du taux de TVA
+      // If the TVA is invalid or <= 0, we won't recalc
       if (isNaN(tauxTVA) || tauxTVA <= 0) {
-        tauxTVA = null; // Si invalide, on ne calcule rien
+        tauxTVA = null;
       }
 
       if (tauxTVA) {
-        const tvaRate = tauxTVA; // Le taux est utilisé tel quel (ex: 0.055 pour 5.5%)
-
+        // E.g. 0.055 => 5.5%
         if (isNaN(montantTTC) && !isNaN(montantHT)) {
-          montantTTC = montantHT * (1 + tvaRate);
+          montantTTC = montantHT * (1 + tauxTVA);
           sale["MONTANT TTC"] = montantTTC.toFixed(2);
         }
         if (isNaN(montantHT) && !isNaN(montantTTC)) {
-          montantHT = montantTTC / (1 + tvaRate);
+          montantHT = montantTTC / (1 + tauxTVA);
           sale["MONTANT HT"] = montantHT.toFixed(2);
         }
       }
@@ -140,15 +151,14 @@ const processSalesData = (salesData) => {
         sale["MONTANT TTC"] = "0.00";
       }
 
-      // Conversion du taux de TVA pour l'affichage
+      // Convert numeric TVA to a string, e.g. 0.055 => "5,5%"
       sale["TAUX TVA"] = tauxTVA
-        ? `${(tauxTVA * 100).toFixed(1).replace(".", ",")}%` // Convertit 0.055 en "5,5%"
+        ? `${(tauxTVA * 100).toFixed(1).replace(".", ",")}%`
         : "";
 
       if (!sale["PREVISION CHANTIER"]) {
         sale["PREVISION CHANTIER"] = null;
       }
-
       if (!sale["BAREME COM"]) {
         sale["BAREME COM"] = "T5";
       }
@@ -185,6 +195,8 @@ const AllSales = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Save hidden sales in localStorage so they remain hidden on reload
   const [hiddenSales, setHiddenSales] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("hiddenSales");
@@ -197,6 +209,7 @@ const AllSales = () => {
   const { width, height } = useWindowSize();
   const tableRef = useRef(null);
 
+  // Fetch sales whenever month/year changes (if showAllSales is false, we filter after fetch)
   useEffect(() => {
     fetchSales();
   }, [selectedMonth, selectedYear]);
@@ -211,49 +224,52 @@ const AllSales = () => {
         );
       }
       const data = await response.json();
+
+      // Process the data (fix TVA, deduplicate, etc.)
       const processedSales = processSalesData(data.data);
       setSales(processedSales);
       filterSales(processedSales);
-    } catch (error) {
-      console.error("Erreur lors de la récupération des ventes :", error);
-      setError(`Erreur : ${error.message}`);
+    } catch (err) {
+      console.error("Erreur lors de la récupération des ventes :", err);
+      setError(`Erreur : ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
+  // Filter & sort the sales array based on searchTerm, date filters, etc.
   const filterSales = (salesData) => {
     let filtered = salesData.filter((sale) => {
       const saleDate = new Date(sale["DATE DE VENTE"]);
-      const etat = normalizeString(sale.ETAT || "");
       const dateCondition = showAllSales
         ? true
         : saleDate.getMonth() === selectedMonth &&
           saleDate.getFullYear() === selectedYear;
 
-      return (
-        dateCondition &&
-        !isExcludedState(etat) &&
-        !hiddenSales.includes(sale._id)
-      );
+      // We remove only hiddenSales, not "annule" ones. So annule stays visible
+      if (!dateCondition) return false;
+      if (hiddenSales.includes(sale._id)) return false;
+
+      // If there's a search term, match on various fields
+      if (searchTerm) {
+        const normalized = normalizeString(searchTerm);
+        const matches =
+          normalizeString(sale["NOM DU CLIENT"] || "").includes(normalized) ||
+          normalizeString(sale["TELEPHONE"] || "").includes(normalized) ||
+          normalizeString(sale["ADRESSE DU CLIENT"] || "").includes(normalized) ||
+          normalizeString(sale["VENDEUR"] || "").includes(normalized) ||
+          normalizeString(sale["DESIGNATION"] || "").includes(normalized);
+        if (!matches) return false;
+      }
+
+      return true;
     });
 
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (sale) =>
-          normalizeString(sale["NOM DU CLIENT"] || "").includes(searchTerm) ||
-          normalizeString(sale["TELEPHONE"] || "").includes(searchTerm) ||
-          normalizeString(sale["ADRESSE DU CLIENT"] || "").includes(
-            searchTerm
-          ) ||
-          normalizeString(sale["VENDEUR"] || "").includes(searchTerm) ||
-          normalizeString(sale["DESIGNATION"] || "").includes(searchTerm)
-      );
-    }
-
+    // Sort
     filtered.sort((a, b) => {
       let valueA = a[sortField];
       let valueB = b[sortField];
+
       if (sortField === "DATE DE VENTE" || sortField === "PREVISION CHANTIER") {
         valueA = valueA ? new Date(valueA) : new Date(0);
         valueB = valueB ? new Date(valueB) : new Date(0);
@@ -264,11 +280,13 @@ const AllSales = () => {
         valueA = normalizeString(valueA);
         valueB = normalizeString(valueB);
       }
+
       if (valueA < valueB) return sortOrder === "asc" ? -1 : 1;
       if (valueA > valueB) return sortOrder === "asc" ? 1 : -1;
       return 0;
     });
 
+    // Pagination
     setTotalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
@@ -276,6 +294,7 @@ const AllSales = () => {
     setDisplayedSales(paginatedSales);
   };
 
+  // Re-run filter whenever these states change
   useEffect(() => {
     filterSales(sales);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -303,6 +322,7 @@ const AllSales = () => {
     setIsModalOpen(true);
   };
 
+  // Add a new payment to the selectedSale
   const handleAddPayment = () => {
     if (!newPaymentAmount || !newPaymentDate) {
       alert("Veuillez remplir tous les champs de paiement.");
@@ -316,13 +336,15 @@ const AllSales = () => {
     }
 
     const newPayment = {
-      montant: montant,
+      montant,
       date: newPaymentDate,
       comment: newPaymentComment,
       id: Date.now(),
     };
 
-    setPayments((prevPayments) => [...prevPayments, newPayment]);
+    setPayments((prev) => [...prev, newPayment]);
+
+    // Also update the main sales array so we keep them in memory
     setSales((prevSales) =>
       prevSales.map((s) =>
         s._id === selectedSale._id
@@ -331,6 +353,7 @@ const AllSales = () => {
       )
     );
 
+    // Reset input fields
     setNewPaymentAmount("");
     setNewPaymentDate("");
     setNewPaymentComment("");
@@ -339,12 +362,11 @@ const AllSales = () => {
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
     setOcrLoading(true);
     try {
-      const {
-        data: { text },
-      } = await Tesseract.recognize(file, "fra");
-      const amount = extractAmountFromText(text);
+      const { data } = await Tesseract.recognize(file, "fra");
+      const amount = extractAmountFromText(data.text);
       if (amount) {
         setNewPaymentAmount(amount);
       } else {
@@ -358,6 +380,7 @@ const AllSales = () => {
     }
   };
 
+  // Regex to find something like "123.45" or "123,45"
   const extractAmountFromText = (text) => {
     const regex = /(\d+[\.,\s]\d{2})/g;
     const matches = text.match(regex);
@@ -367,6 +390,7 @@ const AllSales = () => {
     return null;
   };
 
+  // Payment calculations
   const calculateTotalPaid = () =>
     payments.reduce((sum, payment) => sum + payment.montant, 0);
 
@@ -379,6 +403,7 @@ const AllSales = () => {
     return totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
   };
 
+  // Copy sale info to clipboard
   const handleCopySale = (sale) => {
     const saleData = `
 Date de Vente: ${formatDate(sale["DATE DE VENTE"])}
@@ -409,14 +434,15 @@ Observation: ${sale["OBSERVATION"] || ""}
       });
   };
 
+  // Hide a sale from the table (store its _id in localStorage)
   const handleHideSale = (sale) => {
-    const confirmation = confirm(
-      "Êtes-vous sûr de vouloir cacher cette vente ?"
-    );
+    const confirmation = confirm("Êtes-vous sûr de vouloir cacher cette vente ?");
     if (!confirmation) return;
     const updatedHiddenSales = [...hiddenSales, sale._id];
     setHiddenSales(updatedHiddenSales);
     localStorage.setItem("hiddenSales", JSON.stringify(updatedHiddenSales));
+
+    // Also remove it from displayed
     setSales((prevSales) => prevSales.filter((s) => s._id !== sale._id));
     setDisplayedSales((prevDisplayedSales) =>
       prevDisplayedSales.filter((s) => s._id !== sale._id)
@@ -424,52 +450,57 @@ Observation: ${sale["OBSERVATION"] || ""}
     alert("Vente cachée avec succès.");
   };
 
+  // Save changes to the selectedSale (PUT /api/ventes/:id)
   const handleSaveSale = async () => {
     try {
       const updatedSale = selectedSale;
-      const response = await fetch(`/api/ventes/${updatedSale._id}`, {
+      const res = await fetch(`/api/ventes/${updatedSale._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedSale),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setSales((prevSales) =>
-          prevSales.map((sale) =>
-            sale._id === data.data._id ? data.data : sale
-          )
-        );
-        alert("Vente mise à jour avec succès !");
-        setIsModalOpen(false);
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Erreur : ${response.status}`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || `Erreur : ${res.status}`);
       }
+
+      const data = await res.json();
+      // Update the local sales array with the returned data
+      setSales((prevSales) =>
+        prevSales.map((sale) =>
+          sale._id === data.data._id ? data.data : sale
+        )
+      );
+      alert("Vente mise à jour avec succès !");
+      setIsModalOpen(false);
     } catch (error) {
       console.error("Erreur lors de la sauvegarde :", error.message);
       alert(`Erreur lors de la sauvegarde : ${error.message}`);
     }
   };
 
+  // Summation for MONTANT HT, ignoring annule
   const calculateTotalHT = () => {
     return displayedSales.reduce((sum, sale) => {
-      const etat = normalizeString(sale.ETAT || "");
-      if (etat === "annule") return sum;
+      const etatNormalized = normalizeString(sale.ETAT || "");
+      if (etatNormalized === "annule") return sum; // skip
       const montantHT = parseFloat(sale["MONTANT HT"]);
       return sum + (isNaN(montantHT) ? 0 : montantHT);
     }, 0);
   };
 
+  // Summation for MONTANT TTC, ignoring annule
   const calculateTotalTTC = () => {
     return displayedSales.reduce((sum, sale) => {
-      const etat = normalizeString(sale.ETAT || "");
-      if (etat === "annule") return sum;
+      const etatNormalized = normalizeString(sale.ETAT || "");
+      if (etatNormalized === "annule") return sum; // skip
       const montantTTC = parseFloat(sale["MONTANT TTC"]);
       return sum + (isNaN(montantTTC) ? 0 : montantTTC);
     }, 0);
   };
 
+  // Copies the displayed sales as CSV
   const handleCopyCSV = () => {
     if (displayedSales.length === 0) {
       alert("Aucune vente à copier.");
@@ -495,6 +526,7 @@ Observation: ${sale["OBSERVATION"] || ""}
     ];
     const lines = [];
     lines.push(fields.join(";"));
+
     for (const sale of displayedSales) {
       const values = fields.map((f) => sale[f] || "");
       lines.push(values.join(";"));
@@ -507,6 +539,7 @@ Observation: ${sale["OBSERVATION"] || ""}
       .catch(() => alert("Erreur lors de la copie du CSV."));
   };
 
+  // Downloads the displayed sales as CSV
   const handleDownloadCSV = () => {
     if (displayedSales.length === 0) {
       alert("Aucune vente à télécharger.");
@@ -532,10 +565,12 @@ Observation: ${sale["OBSERVATION"] || ""}
     ];
     const lines = [];
     lines.push(fields.join(";"));
+
     for (const sale of displayedSales) {
       const values = fields.map((f) => sale[f] || "");
       lines.push(values.join(";"));
     }
+
     const csv = lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -562,12 +597,16 @@ Observation: ${sale["OBSERVATION"] || ""}
     "Décembre",
   ];
 
-  if (loading)
+  if (loading) {
     return <p className="text-center text-gray-700">Chargement...</p>;
-  if (error) return <p className="text-center text-red-500">{error}</p>;
+  }
+  if (error) {
+    return <p className="text-center text-red-500">{error}</p>;
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center bg-gray-800 p-2 font-arial text-[10px]">
+      {/* Top controls */}
       <div className="flex flex-col items-center w-full mb-2">
         <button
           onClick={() => router.back()}
@@ -581,6 +620,7 @@ Observation: ${sale["OBSERVATION"] || ""}
         >
           {showAllSales ? "Afficher mensuelles" : "Afficher toutes"}
         </button>
+        {/* Search */}
         <div className="flex flex-col md:flex-row items-center justify-center w-full mb-1 space-y-1 md:space-y-0">
           <input
             type="text"
@@ -590,6 +630,7 @@ Observation: ${sale["OBSERVATION"] || ""}
             className="w-full md:w-1/2 p-1 border border-gray-300 rounded text-[10px]"
           />
         </div>
+        {/* Sort & CSV actions */}
         <div className="flex flex-wrap items-center justify-center w-full mb-1 space-x-1">
           <label className="text-white text-[10px]">Trier par:</label>
           <select
@@ -630,11 +671,9 @@ Observation: ${sale["OBSERVATION"] || ""}
         </div>
       </div>
 
+      {/* Table */}
       <div className="w-full overflow-x-auto mb-8">
-        <table
-          ref={tableRef}
-          className="min-w-full bg-white text-gray-800 text-[10px]"
-        >
+        <table ref={tableRef} className="min-w-full bg-white text-gray-800 text-[10px]">
           <thead className="bg-gray-700 text-white">
             {showAllSales ? (
               <tr>
@@ -674,14 +713,18 @@ Observation: ${sale["OBSERVATION"] || ""}
           </thead>
           <tbody>
             {displayedSales.map((sale) => {
-              const etatNormalized = normalizeString(sale.ETAT);
+              const etatNormalized = normalizeString(sale.ETAT || "");
               let rowClass = "";
+
+              // Keep annule in the table, but mark them red & blinking
               if (etatNormalized === "annule") {
                 rowClass = "bg-red-200 animate-blink";
               } else if (!sale["ADRESSE DU CLIENT"] || !sale.VILLE) {
+                // If missing address or city, highlight in blinking yellow
                 rowClass = "animate-blink-yellow";
               }
 
+              // Payment progress bar
               const totalPaid = (sale.payments || []).reduce(
                 (sum, p) => sum + parseFloat(p.montant),
                 0
@@ -700,6 +743,7 @@ Observation: ${sale["OBSERVATION"] || ""}
                   onDoubleClick={() => handleRowDoubleClick(sale)}
                 >
                   {showAllSales ? (
+                    // Show Full Table
                     <>
                       <td className="border px-1 py-1">
                         {formatDate(sale["DATE DE VENTE"])}
@@ -716,11 +760,15 @@ Observation: ${sale["OBSERVATION"] || ""}
                       <td className="border px-1 py-1">
                         {sale["ADRESSE DU CLIENT"] || ""}
                       </td>
-                      <td className="border px-1 py-1">{sale["CODE INTERP etage"] || ""}</td>
+                      <td className="border px-1 py-1">
+                        {sale["CODE INTERP etage"] || ""}
+                      </td>
                       <td className="border px-1 py-1">
                         {sale["VILLE"] || ""}
                       </td>
-                      <td className="border px-1 py-1">{sale["CP"] || ""}</td>
+                      <td className="border px-1 py-1">
+                        {sale["CP"] || ""}
+                      </td>
                       <td className="border px-1 py-1">
                         {sale["TELEPHONE"] || ""}
                       </td>
@@ -756,9 +804,7 @@ Observation: ${sale["OBSERVATION"] || ""}
                           <FontAwesomeIcon icon={faEdit} />
                         </button>
                         <button
-                          onClick={() =>
-                            router.push(`/file/details/${sale._id}`)
-                          }
+                          onClick={() => router.push(`/file/details/${sale._id}`)}
                           className="px-1 py-1 bg-green-500 text-white rounded text-[10px]"
                           title="Détails"
                         >
@@ -788,9 +834,11 @@ Observation: ${sale["OBSERVATION"] || ""}
                       </td>
                     </>
                   ) : (
+                    // Show Monthly Simplified Table
                     <>
                       <td className="border px-1 py-1 relative">
                         {formatDate(sale["DATE DE VENTE"])}
+                        {/* Payment progress bar below */}
                         <div className="absolute bottom-0 left-0 w-full">
                           <div className="w-full bg-gray-300 h-1">
                             <div
@@ -806,7 +854,9 @@ Observation: ${sale["OBSERVATION"] || ""}
                       <td className="border px-1 py-1">
                         {sale["VENDEUR"] || "Inconnu"}
                       </td>
-                      <td className="border px-1 py-1">{sale["BC"] || ""}</td>
+                      <td className="border px-1 py-1">
+                        {sale["NUMERO BC"] || ""}
+                      </td>
                       <td className="border px-1 py-1">
                         {sale["DESIGNATION"] || "N/A"}
                       </td>
@@ -864,9 +914,7 @@ Observation: ${sale["OBSERVATION"] || ""}
                           <FontAwesomeIcon icon={faEdit} />
                         </button>
                         <button
-                          onClick={() =>
-                            router.push(`/file/details/${sale._id}`)
-                          }
+                          onClick={() => router.push(`/file/details/${sale._id}`)}
                           className="px-1 py-1 bg-green-500 text-white rounded text-[10px]"
                           title="Détails"
                         >
@@ -900,6 +948,7 @@ Observation: ${sale["OBSERVATION"] || ""}
               );
             })}
 
+            {/* Totals row */}
             {showAllSales ? (
               <tr
                 className="bg-gray-200 font-bold cursor-pointer"
@@ -940,6 +989,7 @@ Observation: ${sale["OBSERVATION"] || ""}
         </table>
       </div>
 
+      {/* Pagination */}
       <div className="flex justify-center items-center space-x-1 mt-2 text-[10px]">
         <button
           onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
@@ -962,8 +1012,10 @@ Observation: ${sale["OBSERVATION"] || ""}
         </button>
       </div>
 
+      {/* Confetti for the totals row hover */}
       {showConfetti && <Confetti width={width} height={height} />}
 
+      {/* Modal for payments */}
       {isModalOpen && selectedSale && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <div className="bg-white w-11/12 md:w-2/3 lg:w-1/2 p-2 rounded-lg overflow-y-auto max-h-screen text-[10px]">
@@ -978,6 +1030,8 @@ Observation: ${sale["OBSERVATION"] || ""}
                 <FontAwesomeIcon icon={faTimes} size="lg" />
               </button>
             </div>
+
+            {/* Vente overview */}
             <div className="mb-2 border-b pb-1">
               <h3 className="text-xs font-semibold mb-1">Aperçu de la Vente</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-[10px]">
@@ -1030,6 +1084,7 @@ Observation: ${sale["OBSERVATION"] || ""}
               </div>
             </div>
 
+            {/* Prévision Chantier */}
             <div className="mb-2 text-[10px]">
               <h3 className="font-bold mb-1 text-xs">Prévision Chantier:</h3>
               <input
@@ -1060,10 +1115,9 @@ Observation: ${sale["OBSERVATION"] || ""}
               </button>
             </div>
 
+            {/* Payment progress */}
             <div className="mb-2 text-[10px]">
-              <h3 className="font-bold mb-1 text-xs">
-                Progression des Paiements :
-              </h3>
+              <h3 className="font-bold mb-1 text-xs">Progression des Paiements :</h3>
               <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
                 <div
                   className="bg-green-500 h-2 rounded-full"
@@ -1092,10 +1146,9 @@ Observation: ${sale["OBSERVATION"] || ""}
               </p>
             </div>
 
+            {/* Payment history */}
             <div className="mb-2 text-[10px]">
-              <h3 className="font-bold mb-1 text-xs">
-                Historique des paiements:
-              </h3>
+              <h3 className="font-bold mb-1 text-xs">Historique des paiements:</h3>
               {payments.length > 0 ? (
                 <ul className="list-disc list-inside text-[10px]">
                   {payments.map((payment) => (
@@ -1117,6 +1170,7 @@ Observation: ${sale["OBSERVATION"] || ""}
               )}
             </div>
 
+            {/* New payment form */}
             <div className="mb-2 text-[10px]">
               <h3 className="font-bold mb-1 text-xs">Ajouter un paiement:</h3>
               <div className="flex flex-col space-y-1">
@@ -1165,6 +1219,7 @@ Observation: ${sale["OBSERVATION"] || ""}
         </div>
       )}
 
+      {/* Footer for monthly view: picks month & year */}
       {!showAllSales && (
         <footer className="fixed bottom-0 left-0 w-full bg-gray-700 text-white py-1 flex flex-col md:flex-row justify-between items-center px-1 text-[10px]">
           <div className="flex space-x-1 overflow-x-auto mb-1 md:mb-0">
@@ -1209,6 +1264,7 @@ Observation: ${sale["OBSERVATION"] || ""}
         </footer>
       )}
 
+      {/* Blinking row animations */}
       <style jsx>{`
         @keyframes blink {
           0% {

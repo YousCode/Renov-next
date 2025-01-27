@@ -4,7 +4,12 @@ import React, { useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSave, faFile, faCopy, faDownload } from "@fortawesome/free-solid-svg-icons";
+import {
+  faSave,
+  faFile,
+  faCopy,
+  faDownload,
+} from "@fortawesome/free-solid-svg-icons";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -55,7 +60,7 @@ const EditSale = () => {
   const excludedFields = ["_id", "createdAt", "updatedAt", "__v"];
 
   // --------------------------------------------------------------------
-  // Récupération de la vente
+  // Récupération de la vente (GET)
   // --------------------------------------------------------------------
   useEffect(() => {
     const fetchSale = async () => {
@@ -71,12 +76,10 @@ const EditSale = () => {
         // Date de Vente
         if (vente["DATE DE VENTE"]) {
           setSaleDate(parseDateString(vente["DATE DE VENTE"]));
+        } else if (saleDateParam) {
+          setSaleDate(parseDateString(saleDateParam));
         } else {
-          if (saleDateParam) {
-            setSaleDate(parseDateString(saleDateParam));
-          } else {
-            setSaleDate(new Date());
-          }
+          setSaleDate(new Date());
         }
 
         // Prévision Chantier
@@ -99,19 +102,17 @@ const EditSale = () => {
   // --------------------------------------------------------------------
   const handleInputChange = (e) => {
     if (!sale) return;
-
     const { name, value } = e.target;
+
     setSale((prev) => {
       const updated = { ...prev, [name]: value };
 
       // Recalcul MONTANT HT si "MONTANT TTC" ou "TAUX TVA" changent
       if (name === "MONTANT TTC" || name === "TAUX TVA") {
         const montantTTC = parseFloat(updated["MONTANT TTC"]) || 0;
-
-        // On suppose que la "TAUX TVA" est stockée sous forme de pourcentage (5.5, 10, 20, etc.)
-        let tvaPourcent = parseFloat(updated["TAUX TVA"]) || TVA_RATE_DEFAULT * 100; 
-        // ex: "10" => 10 => tvaDecimal = 0.1
-        const tvaDecimal = tvaPourcent / 100; 
+        let tvaPourcent =
+          parseFloat(updated["TAUX TVA"]) || TVA_RATE_DEFAULT * 100; // e.g. "10" => 10 => 0.1
+        const tvaDecimal = tvaPourcent / 100;
 
         const ht = montantTTC / (1 + tvaDecimal);
         updated["MONTANT HT"] = ht > 0 ? ht.toFixed(2) : "0.00";
@@ -121,7 +122,7 @@ const EditSale = () => {
   };
 
   // --------------------------------------------------------------------
-  // Sauvegarde
+  // Sauvegarde (PUT)
   // --------------------------------------------------------------------
   const handleSave = async (e) => {
     e.preventDefault();
@@ -160,6 +161,8 @@ const EditSale = () => {
         type: "success",
         message: "Vente mise à jour avec succès !",
       });
+
+      // Redirection ou retour
       setTimeout(() => {
         router.back();
       }, 1500);
@@ -173,8 +176,10 @@ const EditSale = () => {
   // --------------------------------------------------------------------
   const handleCopyCSV = () => {
     if (!sale) return;
-    const entries = Object.entries(sale).filter(([k]) => !excludedFields.includes(k));
-    const line = entries.map(([k, v]) => v || "").join(";");
+    const entries = Object.entries(sale).filter(
+      ([k]) => !excludedFields.includes(k)
+    );
+    const line = entries.map(([_, v]) => v || "").join(";");
     navigator.clipboard
       .writeText(line)
       .then(() => {
@@ -193,9 +198,11 @@ const EditSale = () => {
 
   const handleDownloadCSV = () => {
     if (!sale) return;
-    const entries = Object.entries(sale).filter(([k]) => !excludedFields.includes(k));
+    const entries = Object.entries(sale).filter(
+      ([k]) => !excludedFields.includes(k)
+    );
     const headers = entries.map(([k]) => k).join(";");
-    const values = entries.map(([k, v]) => v || "").join(";");
+    const values = entries.map(([_, v]) => v || "").join(";");
     const csv = headers + "\n" + values;
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -208,6 +215,7 @@ const EditSale = () => {
     document.body.removeChild(a);
   };
 
+  // Example: button to go to "File" details
   const handleFileAction = (saleId) => {
     router.push(`/file/details/${saleId}`);
   };
