@@ -111,12 +111,15 @@ function getBaremeBgColor(bareme) {
  * - convert numeric TVA to "5,5%" style string
  * - fill missing fields
  * - deduplicate based on an identifier (so the same sale doesn't appear twice)
+ * - clamp TauxTVA to a max of 20% (0.2)
+ *   also handle "550" => 5.5% or "1000" => 10%
  */
-const processSalesData = (salesData) => {
+function processSalesData(salesData) {
   const uniqueSales = [];
   const seen = new Set();
 
   salesData.forEach((sale) => {
+    // Create a unique identifier to avoid duplicates
     const identifier = `${normalizeString(sale["NOM DU CLIENT"])}|${formatDate(
       sale["DATE DE VENTE"]
     )}|${sale["MONTANT TTC"]}|${sale["VENDEUR"]}`;
@@ -126,42 +129,71 @@ const processSalesData = (salesData) => {
 
       let montantHT = parseFloat(sale["MONTANT HT"]);
       let montantTTC = parseFloat(sale["MONTANT TTC"]);
-      let tauxTVA = parseFloat(sale["TAUX TVA"]);
+      
+      // 1) Parse the raw TVA from the sale
+      let rawTaux = parseFloat(sale["TAUX TVA"]); 
+      if (isNaN(rawTaux) || rawTaux <= 0) {
+        // If invalid or <= 0, we'll assume "no valid TVA" => no conversion
+        rawTaux = null;
+      } else {
+        // 2) If user typed something like 0.1 => that’s obviously 0.1% => interpret as 10
+        //    Or if typed 550 => interpret as 5.5
+        //    So if rawTaux > 100, we divide by 100
+        if (rawTaux > 100) {
+          rawTaux = rawTaux / 100; 
+        }
 
-      // If the TVA is invalid or <= 0, we won't recalc
-      if (isNaN(tauxTVA) || tauxTVA <= 0) {
-        tauxTVA = null;
+        // 3) Now clamp: min 5.5, max 20
+        if (rawTaux < 5.5) {
+          rawTaux = 5.5;
+        }
+        if (rawTaux > 20) {
+          rawTaux = 20;
+        }
+
+        // 4) Convert from “percent” to decimal. E.g. 10 => 0.10, 5.5 => 0.055
+        rawTaux = rawTaux / 100; 
       }
 
-      if (tauxTVA) {
-        // E.g. 0.055 => 5.5%
+      // Use rawTaux for Montant TTC ↔ Montant HT consistency
+      if (rawTaux) {
+        // If Montant HT is known but Montant TTC is not
         if (isNaN(montantTTC) && !isNaN(montantHT)) {
-          montantTTC = montantHT * (1 + tauxTVA);
+          montantTTC = montantHT * (1 + rawTaux);
           sale["MONTANT TTC"] = montantTTC.toFixed(2);
         }
+        // If Montant TTC is known but Montant HT is not
         if (isNaN(montantHT) && !isNaN(montantTTC)) {
-          montantHT = montantTTC / (1 + tauxTVA);
+          montantHT = montantTTC / (1 + rawTaux);
           sale["MONTANT HT"] = montantHT.toFixed(2);
         }
       }
 
+      // If we still have NaN in both, zero them out
       if (isNaN(montantHT) && isNaN(montantTTC)) {
         sale["MONTANT HT"] = "0.00";
         sale["MONTANT TTC"] = "0.00";
       }
 
-      // Convert numeric TVA to a string, e.g. 0.055 => "5,5%"
-      sale["TAUX TVA"] = tauxTVA
-        ? `${(tauxTVA * 100).toFixed(1).replace(".", ",")}%`
-        : "";
+      // 5) Convert the final decimal to a display string, e.g. 0.055 => “5,5%”
+      if (rawTaux) {
+        const displayPercent = (rawTaux * 100).toFixed(1).replace(".", ",") + "%";
+        sale["TAUX TVA"] = displayPercent; 
+      } else {
+        sale["TAUX TVA"] = ""; 
+      }
 
+      // If “PREVISION CHANTIER” missing, set to null for consistency
       if (!sale["PREVISION CHANTIER"]) {
         sale["PREVISION CHANTIER"] = null;
       }
+
+      // If “BAREME COM” missing, default to “T5” (example)
       if (!sale["BAREME COM"]) {
         sale["BAREME COM"] = "T5";
       }
 
+      // Recalculate “MONTANT COMMISSIONS” if you have that logic
       sale["MONTANT COMMISSIONS"] = calculateCommission(sale);
 
       uniqueSales.push(sale);
@@ -169,7 +201,7 @@ const processSalesData = (salesData) => {
   });
 
   return uniqueSales;
-};
+}
 
 const ITEMS_PER_PAGE = 500;
 

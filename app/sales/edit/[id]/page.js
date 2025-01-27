@@ -60,7 +60,7 @@ const EditSale = () => {
   const excludedFields = ["_id", "createdAt", "updatedAt", "__v"];
 
   // --------------------------------------------------------------------
-  // Récupération de la vente (GET)
+  // 1. Récupération de la vente (GET)
   // --------------------------------------------------------------------
   useEffect(() => {
     const fetchSale = async () => {
@@ -98,7 +98,7 @@ const EditSale = () => {
   }, [id, saleDateParam]);
 
   // --------------------------------------------------------------------
-  // handleInputChange
+  // 2. handleInputChange
   // --------------------------------------------------------------------
   const handleInputChange = (e) => {
     if (!sale) return;
@@ -107,22 +107,49 @@ const EditSale = () => {
     setSale((prev) => {
       const updated = { ...prev, [name]: value };
 
-      // Recalcul MONTANT HT si "MONTANT TTC" ou "TAUX TVA" changent
+      // -------------------------------
+      // 2A. Gérer la TVA
+      // -------------------------------
+      if (name === "TAUX TVA") {
+        // Convert the string to a float
+        let tvaPourcent = parseFloat(value);
+        // if user typed nonsense or left it empty, default to 10
+        if (isNaN(tvaPourcent)) {
+          tvaPourcent = 10;
+        }
+        // if user typed 550 => interpret as 5.5, if 1000 => 10, etc.
+        if (tvaPourcent > 100) {
+          tvaPourcent = tvaPourcent / 100;
+        }
+        // clamp min=5.5, max=20
+        if (tvaPourcent < 5.5) tvaPourcent = 5.5;
+        if (tvaPourcent > 20) tvaPourcent = 20;
+
+        // Update the object with the clamped TVA
+        updated["TAUX TVA"] = String(tvaPourcent);
+      }
+
+      // -------------------------------
+      // 2B. Recalcul du MONTANT HT si "MONTANT TTC" ou "TAUX TVA" changent
+      // -------------------------------
       if (name === "MONTANT TTC" || name === "TAUX TVA") {
         const montantTTC = parseFloat(updated["MONTANT TTC"]) || 0;
-        let tvaPourcent =
-          parseFloat(updated["TAUX TVA"]) || TVA_RATE_DEFAULT * 100; // e.g. "10" => 10 => 0.1
+
+        // tvaPourcent might have changed above
+        let tvaPourcent = parseFloat(updated["TAUX TVA"]) || TVA_RATE_DEFAULT * 100;
+        // if user typed 550 => code above has fixed it to 5.5, etc.
         const tvaDecimal = tvaPourcent / 100;
 
         const ht = montantTTC / (1 + tvaDecimal);
         updated["MONTANT HT"] = ht > 0 ? ht.toFixed(2) : "0.00";
       }
+
       return updated;
     });
   };
 
   // --------------------------------------------------------------------
-  // Sauvegarde (PUT)
+  // 3. Sauvegarde (PUT)
   // --------------------------------------------------------------------
   const handleSave = async (e) => {
     e.preventDefault();
@@ -139,7 +166,7 @@ const EditSale = () => {
       return;
     }
 
-    // Convertit les DatePickers => format "dd/MM/yyyy"
+    // Convertir les DatePickers => "dd/MM/yyyy"
     sale["DATE DE VENTE"] = saleDate ? formatDateDDMMYYYY(saleDate) : "";
     sale["PREVISION CHANTIER"] = prevChantierDate
       ? formatDateDDMMYYYY(prevChantierDate)
@@ -161,7 +188,6 @@ const EditSale = () => {
         type: "success",
         message: "Vente mise à jour avec succès !",
       });
-
       // Redirection ou retour
       setTimeout(() => {
         router.back();
@@ -172,7 +198,7 @@ const EditSale = () => {
   };
 
   // --------------------------------------------------------------------
-  // CSV
+  // 4. CSV
   // --------------------------------------------------------------------
   const handleCopyCSV = () => {
     if (!sale) return;
@@ -215,13 +241,13 @@ const EditSale = () => {
     document.body.removeChild(a);
   };
 
-  // Example: button to go to "File" details
+  // Fichier
   const handleFileAction = (saleId) => {
     router.push(`/file/details/${saleId}`);
   };
 
   // --------------------------------------------------------------------
-  // ÉTATS DE CHARGEMENT
+  // 5. ÉTATS DE CHARGEMENT
   // --------------------------------------------------------------------
   if (loading) {
     return (
@@ -260,6 +286,7 @@ const EditSale = () => {
     "PREVISION CHANTIER": "",
     OBSERVATION: "",
   };
+  // Fusionne la vente réelle avec les valeurs par défaut
   const currentSale = { ...defaultSale, ...sale };
 
   return (
