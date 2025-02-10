@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import Navbar from "@/components/Navbar"; // <-- si vous avez un composant Navbar
+import Navbar from "@/components/Navbar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSave,
@@ -17,7 +17,21 @@ import "react-datepicker/dist/react-datepicker.css";
 const TVA_RATE_DEFAULT = 0.2;
 
 /**
- * Convertit une chaîne ISO en objet Date (retourne null si échec).
+ * Formatage pour affichage en "dd/MM/yyyy".
+ * Utile si vous souhaitez afficher la date au format français,
+ * mais ce n'est pas le format envoyé au serveur.
+ */
+function formatDateDDMMYYYY(dateObj) {
+  if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return "";
+  const d = String(dateObj.getDate()).padStart(2, "0");
+  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const y = dateObj.getFullYear();
+  return `${d}/${m}/${y}`;
+}
+
+/**
+ * Petite fonction utilitaire pour vérifier si une chaîne est au format ISO.
+ * On renvoie un objet Date si c'est interprétable, sinon null.
  */
 function parseIsoString(str) {
   if (!str) return null;
@@ -25,7 +39,7 @@ function parseIsoString(str) {
   return isNaN(dateObj.getTime()) ? null : dateObj;
 }
 
-export default function EditSale() {
+const EditSale = () => {
   const { id } = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -60,23 +74,30 @@ export default function EditSale() {
         const data = await res.json();
         const vente = data.data;
 
-        // Convertir les chaînes ISO en objets Date
+        // On part du principe que le backend stocke la date
+        // au format ISO. Ex. "2025-02-10T10:00:00.000Z"
+        // => On retransforme en objet Date
         const dateDeVente = parseIsoString(vente["DATE DE VENTE"]);
-        const datePrevChantier = parseIsoString(vente["PREVISION CHANTIER"]);
+        const prevDateChantier = parseIsoString(vente["PREVISION CHANTIER"]);
 
-        // Si la vente a une date, on l'utilise. Sinon, on regarde si on a un param date,
-        // ou par défaut on met la date du jour
+        // Sinon, si ce n'est pas ISO, essayez d'adapter ce parseur.
+        // Par exemple, si vous avez "dd/MM/yyyy", il faudra créer un parseur spécifique.
+
+        // Si pas de date dans la vente, on regarde s'il y a un param "date" dans l'URL
+        // Sinon on met la date du jour
         if (dateDeVente) {
           setSaleDate(dateDeVente);
         } else if (saleDateParam) {
-          const paramDateObj = parseIsoString(saleDateParam);
-          setSaleDate(paramDateObj || new Date());
+          // essayez de parser saleDateParam en ISO, si possible
+          const paramDate = parseIsoString(saleDateParam);
+          setSaleDate(paramDate || new Date());
         } else {
           setSaleDate(new Date());
         }
 
-        if (datePrevChantier) {
-          setPrevChantierDate(datePrevChantier);
+        // Pour la date de prévision chantier
+        if (prevDateChantier) {
+          setPrevChantierDate(prevDateChantier);
         }
 
         setSale(vente);
@@ -105,7 +126,7 @@ export default function EditSale() {
         if (isNaN(tvaPourcent)) {
           tvaPourcent = 10; // Défaut si champ vide
         }
-        // Si l'utilisateur tape 550 => on interprète comme 5.5, etc.
+        // Si l'utilisateur tape 550 => on interprète comme 5.5 etc.
         if (tvaPourcent > 100) {
           tvaPourcent = tvaPourcent / 100;
         }
@@ -119,8 +140,10 @@ export default function EditSale() {
       // 2B. Recalcul du MONTANT HT si "MONTANT TTC" ou "TAUX TVA" changent
       if (name === "MONTANT TTC" || name === "TAUX TVA") {
         const montantTTC = parseFloat(updated["MONTANT TTC"]) || 0;
+
         let tvaPourcent = parseFloat(updated["TAUX TVA"]) || TVA_RATE_DEFAULT * 100;
         const tvaDecimal = tvaPourcent / 100;
+
         const ht = montantTTC / (1 + tvaDecimal);
         updated["MONTANT HT"] = ht > 0 ? ht.toFixed(2) : "0.00";
       }
@@ -147,7 +170,9 @@ export default function EditSale() {
       return;
     }
 
-    // Convertir les dates en format ISO pour l'envoi
+    // IMPORTANT :
+    // Avant d'envoyer au serveur, on stocke les dates au format ISO
+    // car la BDD (ex: MongoDB) reconnaît le champ de type Date s'il reçoit une ISO string.
     sale["DATE DE VENTE"] = saleDate ? saleDate.toISOString() : "";
     sale["PREVISION CHANTIER"] = prevChantierDate
       ? prevChantierDate.toISOString()
@@ -179,11 +204,10 @@ export default function EditSale() {
   };
 
   // --------------------------------------------------------------------
-  // 4. CSV (Copie & Téléchargement)
+  // 4. CSV
   // --------------------------------------------------------------------
   const handleCopyCSV = () => {
     if (!sale) return;
-    // Filtrer les champs à exclure
     const entries = Object.entries(sale).filter(
       ([k]) => !excludedFields.includes(k)
     );
@@ -206,7 +230,6 @@ export default function EditSale() {
 
   const handleDownloadCSV = () => {
     if (!sale) return;
-    // Filtrer les champs à exclure
     const entries = Object.entries(sale).filter(
       ([k]) => !excludedFields.includes(k)
     );
@@ -214,7 +237,6 @@ export default function EditSale() {
     const values = entries.map(([_, v]) => v || "").join(";");
     const csv = headers + "\n" + values;
 
-    // Créer le blob CSV pour le téléchargement
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -225,13 +247,13 @@ export default function EditSale() {
     document.body.removeChild(a);
   };
 
-  // 5. Exemple de bouton "Fichier"
+  // 5. Accès au fichier (redirect)
   const handleFileAction = (saleId) => {
     router.push(`/file/details/${saleId}`);
   };
 
   // --------------------------------------------------------------------
-  // 6. États de chargement / Erreurs
+  // 6. ÉTATS DE CHARGEMENT / ERREURS
   // --------------------------------------------------------------------
   if (loading) {
     return (
@@ -249,7 +271,7 @@ export default function EditSale() {
   }
   if (!sale) return null;
 
-  // Valeurs par défaut au cas où certaines clés n'existent pas
+  // Valeurs par défaut (si certaines clés n'existent pas dans la vente)
   const defaultSale = {
     NUMERO_BC: "",
     CIVILITE: "",
@@ -262,7 +284,7 @@ export default function EditSale() {
     TELEPHONE: "",
     VENDEUR: "",
     DESIGNATION: "",
-    "TAUX TVA": "10",
+    "TAUX TVA": "10", // => 10% => 0.1
     "MONTANT HT": "",
     "MONTANT TTC": "",
     "MONTANT ANNULE": "",
@@ -271,12 +293,11 @@ export default function EditSale() {
     OBSERVATION: "",
   };
 
-  // Fusionne sale et defaultSale
+  // Fusion des valeurs par défaut et de la vente récupérée
   const currentSale = { ...defaultSale, ...sale };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-200 to-gray-600">
-      {/* NAVBAR (optionnelle) */}
       <Navbar />
 
       <div className="max-w-5xl mx-auto py-8 px-4">
@@ -284,7 +305,6 @@ export default function EditSale() {
           Compléter la vente
         </h2>
 
-        {/* Notification */}
         {notification && (
           <div
             className={`p-4 rounded-md mb-6 ${
@@ -297,13 +317,12 @@ export default function EditSale() {
           </div>
         )}
 
-        {/* Formulaire */}
         <form
           onSubmit={handleSave}
           className="bg-white bg-opacity-90 rounded-lg shadow-2xl p-6"
         >
           <div className="grid grid-cols-2 gap-6">
-            {/* Date de Vente */}
+            {/* Date de Vente (Objet Date) */}
             <div>
               <label className="block text-gray-800 font-semibold mb-2">
                 Date de Vente
@@ -314,6 +333,7 @@ export default function EditSale() {
                 dateFormat="dd/MM/yyyy"
                 className="border border-gray-300 p-2 rounded-md w-full"
               />
+              {/* Affichage formaté (optionnel) : {formatDateDDMMYYYY(saleDate)} */}
             </div>
 
             {/* NUMERO_BC */}
@@ -555,7 +575,7 @@ export default function EditSale() {
               </select>
             </div>
 
-            {/* Prévision Chantier */}
+            {/* Prévision Chantier (Objet Date) */}
             <div>
               <label className="block text-gray-800 font-semibold mb-2">
                 Prévision Chantier
@@ -621,4 +641,6 @@ export default function EditSale() {
       </div>
     </div>
   );
-}
+};
+
+export default EditSale;
