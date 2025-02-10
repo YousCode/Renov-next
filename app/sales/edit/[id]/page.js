@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import Navbar from "@/components/Navbar";
+import Navbar from "@/components/Navbar"; // <-- si vous avez un composant Navbar
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSave,
@@ -13,45 +13,32 @@ import {
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
+// Taux TVA par défaut
 const TVA_RATE_DEFAULT = 0.2;
 
 /**
- * Convertit un objet Date JavaScript en string "dd/MM/yyyy"
+ * Convertit une chaîne ISO en objet Date (retourne null si échec).
  */
-function formatDateDDMMYYYY(dateObj) {
-  if (!(dateObj instanceof Date)) return "";
-  const d = String(dateObj.getDate()).padStart(2, "0");
-  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
-  const y = dateObj.getFullYear();
-  return `${d}/${m}/${y}`;
-}
-
-/**
- * parseDateString("05/09/2023") => Date(2023, 8, 5)
- * parseDateString("2023-09-05T12:00:00Z") => Date(2023,8,5,12,0,0)
- * parseDateString("2023-09-05") => Date(2023,8,5)
- */
-function parseDateString(str) {
+function parseIsoString(str) {
   if (!str) return null;
-  if (str.includes("T") || /^\d{4}-\d{2}-\d{2}/.test(str)) {
-    return new Date(str);
-  }
-  if (str.includes("/")) {
-    const [jour, mois, annee] = str.split("/");
-    return new Date(Number(annee), Number(mois) - 1, Number(jour));
-  }
-  return new Date();
+  const dateObj = new Date(str);
+  return isNaN(dateObj.getTime()) ? null : dateObj;
 }
 
-const EditSale = () => {
+export default function EditSale() {
   const { id } = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const saleDateParam = searchParams.get("date");
 
+  // État principal de la vente
   const [sale, setSale] = useState(null);
+
+  // Dates locales (objets Date pour react-datepicker)
   const [saleDate, setSaleDate] = useState(null);
   const [prevChantierDate, setPrevChantierDate] = useState(null);
+
+  // Gestion du chargement, des erreurs et des notifications
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
@@ -73,18 +60,23 @@ const EditSale = () => {
         const data = await res.json();
         const vente = data.data;
 
-        // Date de Vente
-        if (vente["DATE DE VENTE"]) {
-          setSaleDate(parseDateString(vente["DATE DE VENTE"]));
+        // Convertir les chaînes ISO en objets Date
+        const dateDeVente = parseIsoString(vente["DATE DE VENTE"]);
+        const datePrevChantier = parseIsoString(vente["PREVISION CHANTIER"]);
+
+        // Si la vente a une date, on l'utilise. Sinon, on regarde si on a un param date,
+        // ou par défaut on met la date du jour
+        if (dateDeVente) {
+          setSaleDate(dateDeVente);
         } else if (saleDateParam) {
-          setSaleDate(parseDateString(saleDateParam));
+          const paramDateObj = parseIsoString(saleDateParam);
+          setSaleDate(paramDateObj || new Date());
         } else {
           setSaleDate(new Date());
         }
 
-        // Prévision Chantier
-        if (vente["PREVISION CHANTIER"]) {
-          setPrevChantierDate(parseDateString(vente["PREVISION CHANTIER"]));
+        if (datePrevChantier) {
+          setPrevChantierDate(datePrevChantier);
         }
 
         setSale(vente);
@@ -107,39 +99,28 @@ const EditSale = () => {
     setSale((prev) => {
       const updated = { ...prev, [name]: value };
 
-      // -------------------------------
       // 2A. Gérer la TVA
-      // -------------------------------
       if (name === "TAUX TVA") {
-        // Convert the string to a float
         let tvaPourcent = parseFloat(value);
-        // if user typed nonsense or left it empty, default to 10
         if (isNaN(tvaPourcent)) {
-          tvaPourcent = 10;
+          tvaPourcent = 10; // Défaut si champ vide
         }
-        // if user typed 550 => interpret as 5.5, if 1000 => 10, etc.
+        // Si l'utilisateur tape 550 => on interprète comme 5.5, etc.
         if (tvaPourcent > 100) {
           tvaPourcent = tvaPourcent / 100;
         }
-        // clamp min=5.5, max=20
+        // On borne la TVA à [5.5, 20]
         if (tvaPourcent < 5.5) tvaPourcent = 5.5;
         if (tvaPourcent > 20) tvaPourcent = 20;
 
-        // Update the object with the clamped TVA
         updated["TAUX TVA"] = String(tvaPourcent);
       }
 
-      // -------------------------------
       // 2B. Recalcul du MONTANT HT si "MONTANT TTC" ou "TAUX TVA" changent
-      // -------------------------------
       if (name === "MONTANT TTC" || name === "TAUX TVA") {
         const montantTTC = parseFloat(updated["MONTANT TTC"]) || 0;
-
-        // tvaPourcent might have changed above
         let tvaPourcent = parseFloat(updated["TAUX TVA"]) || TVA_RATE_DEFAULT * 100;
-        // if user typed 550 => code above has fixed it to 5.5, etc.
         const tvaDecimal = tvaPourcent / 100;
-
         const ht = montantTTC / (1 + tvaDecimal);
         updated["MONTANT HT"] = ht > 0 ? ht.toFixed(2) : "0.00";
       }
@@ -166,10 +147,10 @@ const EditSale = () => {
       return;
     }
 
-    // Convertir les DatePickers => "dd/MM/yyyy"
-    sale["DATE DE VENTE"] = saleDate ? formatDateDDMMYYYY(saleDate) : "";
+    // Convertir les dates en format ISO pour l'envoi
+    sale["DATE DE VENTE"] = saleDate ? saleDate.toISOString() : "";
     sale["PREVISION CHANTIER"] = prevChantierDate
-      ? formatDateDDMMYYYY(prevChantierDate)
+      ? prevChantierDate.toISOString()
       : "";
 
     try {
@@ -188,7 +169,7 @@ const EditSale = () => {
         type: "success",
         message: "Vente mise à jour avec succès !",
       });
-      // Redirection ou retour
+      // Redirection après un petit délai (optionnel)
       setTimeout(() => {
         router.back();
       }, 1500);
@@ -198,10 +179,11 @@ const EditSale = () => {
   };
 
   // --------------------------------------------------------------------
-  // 4. CSV
+  // 4. CSV (Copie & Téléchargement)
   // --------------------------------------------------------------------
   const handleCopyCSV = () => {
     if (!sale) return;
+    // Filtrer les champs à exclure
     const entries = Object.entries(sale).filter(
       ([k]) => !excludedFields.includes(k)
     );
@@ -224,6 +206,7 @@ const EditSale = () => {
 
   const handleDownloadCSV = () => {
     if (!sale) return;
+    // Filtrer les champs à exclure
     const entries = Object.entries(sale).filter(
       ([k]) => !excludedFields.includes(k)
     );
@@ -231,6 +214,7 @@ const EditSale = () => {
     const values = entries.map(([_, v]) => v || "").join(";");
     const csv = headers + "\n" + values;
 
+    // Créer le blob CSV pour le téléchargement
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -241,13 +225,13 @@ const EditSale = () => {
     document.body.removeChild(a);
   };
 
-  // Fichier
+  // 5. Exemple de bouton "Fichier"
   const handleFileAction = (saleId) => {
     router.push(`/file/details/${saleId}`);
   };
 
   // --------------------------------------------------------------------
-  // 5. ÉTATS DE CHARGEMENT
+  // 6. États de chargement / Erreurs
   // --------------------------------------------------------------------
   if (loading) {
     return (
@@ -265,7 +249,7 @@ const EditSale = () => {
   }
   if (!sale) return null;
 
-  // Valeurs par défaut
+  // Valeurs par défaut au cas où certaines clés n'existent pas
   const defaultSale = {
     NUMERO_BC: "",
     CIVILITE: "",
@@ -278,7 +262,7 @@ const EditSale = () => {
     TELEPHONE: "",
     VENDEUR: "",
     DESIGNATION: "",
-    "TAUX TVA": "10", // => 10% => 0.1
+    "TAUX TVA": "10",
     "MONTANT HT": "",
     "MONTANT TTC": "",
     "MONTANT ANNULE": "",
@@ -286,11 +270,13 @@ const EditSale = () => {
     "PREVISION CHANTIER": "",
     OBSERVATION: "",
   };
-  // Fusionne la vente réelle avec les valeurs par défaut
+
+  // Fusionne sale et defaultSale
   const currentSale = { ...defaultSale, ...sale };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-200 to-gray-600">
+      {/* NAVBAR (optionnelle) */}
       <Navbar />
 
       <div className="max-w-5xl mx-auto py-8 px-4">
@@ -298,6 +284,7 @@ const EditSale = () => {
           Compléter la vente
         </h2>
 
+        {/* Notification */}
         {notification && (
           <div
             className={`p-4 rounded-md mb-6 ${
@@ -310,6 +297,7 @@ const EditSale = () => {
           </div>
         )}
 
+        {/* Formulaire */}
         <form
           onSubmit={handleSave}
           className="bg-white bg-opacity-90 rounded-lg shadow-2xl p-6"
@@ -633,6 +621,4 @@ const EditSale = () => {
       </div>
     </div>
   );
-};
-
-export default EditSale;
+}
