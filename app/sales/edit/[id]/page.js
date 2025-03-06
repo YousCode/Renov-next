@@ -15,17 +15,16 @@ import "react-datepicker/dist/react-datepicker.css";
 
 // --- Constantes de configuration -----------------------------------
 
-// Taux TVA par défaut (sous forme décimale, ex. 0.2 => 20%)
+// Taux TVA par défaut (ex. 0.2 => 20%)
 const TVA_RATE_DEFAULT = 0.2;
 
-// Champs obligatoires pour le formulaire
+// Champs obligatoires
 const REQUIRED_FIELDS = ["NOM DU CLIENT", "prenom", "ADRESSE DU CLIENT"];
 
-// Champs à exclure lors de la génération du CSV
+// Champs à exclure pour le CSV
 const EXCLUDED_FIELDS = ["_id", "createdAt", "updatedAt", "__v"];
 
-// Valeurs par défaut s'il manque des clés dans la vente récupérée.
-// ICI, on utilise "NUMERO BC" pour être cohérent avec votre schéma Mongoose.
+// Valeurs par défaut
 const DEFAULT_SALE = {
   "NUMERO BC": "",
   CIVILITE: "",
@@ -38,7 +37,7 @@ const DEFAULT_SALE = {
   TELEPHONE: "",
   VENDEUR: "",
   DESIGNATION: "",
-  "TAUX TVA": "10",   // Par défaut, 10%
+  "TAUX TVA": "10",  // Par défaut 10%
   "MONTANT HT": "",
   "MONTANT TTC": "",
   "MONTANT ANNULE": "",
@@ -48,8 +47,7 @@ const DEFAULT_SALE = {
 };
 
 /**
- * Convertit une chaîne ISO (ex: "2025-03-05T10:00:00.000Z")
- * en objet Date (ou null si invalide).
+ * Convertit une chaîne ISO en objet Date (ou null si invalide).
  */
 function parseISODate(str) {
   if (!str) return null;
@@ -58,15 +56,15 @@ function parseISODate(str) {
 }
 
 export default function EditSale() {
-  const { id } = useParams();           // Récupère l'id dans l'URL
+  const { id } = useParams();           
   const router = useRouter();
   const searchParams = useSearchParams();
-  const saleDateParam = searchParams.get("date"); // ex: ?date=2025-03-01
+  const saleDateParam = searchParams.get("date");
 
-  // État principal : données de la vente
+  // État de la vente
   const [sale, setSale] = useState(null);
 
-  // Dates utilisées par react-datepicker
+  // Dates pour react-datepicker
   const [saleDate, setSaleDate] = useState(null);
   const [prevChantierDate, setPrevChantierDate] = useState(null);
 
@@ -75,9 +73,9 @@ export default function EditSale() {
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
 
-  // ------------------------------------------------------------------
-  // 1. Récupération de la vente (GET /api/ventes/:id)
-  // ------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────
+  // 1. Récupération (GET /api/ventes/:id)
+  // ─────────────────────────────────────────────────────────
   useEffect(() => {
     async function fetchSale() {
       setLoading(true);
@@ -86,15 +84,13 @@ export default function EditSale() {
         if (!res.ok) {
           throw new Error(`Échec de la récupération : ${res.status}`);
         }
-
         const data = await res.json();
-        const vente = data.data; // Objet renvoyé par la BDD
+        const vente = data.data;
 
-        // Convertit en Date les champs date si existants
+        // Convertit en Date
         const dateDeVente = parseISODate(vente["DATE DE VENTE"]);
         const prevDateChantier = parseISODate(vente["PREVISION CHANTIER"]);
 
-        // Si la vente n’a pas "DATE DE VENTE", on tente ?date=... ou date du jour
         if (dateDeVente) {
           setSaleDate(dateDeVente);
         } else if (saleDateParam) {
@@ -104,7 +100,6 @@ export default function EditSale() {
           setSaleDate(new Date());
         }
 
-        // Pareil pour PREVISION CHANTIER
         if (prevDateChantier) {
           setPrevChantierDate(prevDateChantier);
         }
@@ -116,13 +111,12 @@ export default function EditSale() {
         setLoading(false);
       }
     }
-
     fetchSale();
   }, [id, saleDateParam]);
 
-  // ------------------------------------------------------------------
-  // 2. Gère les changements d'inputs (champ par champ)
-  // ------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────
+  // 2. Gère les changements d'inputs
+  // ─────────────────────────────────────────────────────────
   function handleInputChange(e) {
     if (!sale) return;
     const { name, value } = e.target;
@@ -130,48 +124,50 @@ export default function EditSale() {
     setSale((prev) => {
       const updated = { ...prev, [name]: value };
 
-      // 2A. Gestion de la TVA
+      // 2A) Gestion TVA
       if (name === "TAUX TVA") {
         let tvaPourcent = parseFloat(value);
         if (isNaN(tvaPourcent)) {
-          tvaPourcent = 10; // Valeur par défaut si champ vide
+          tvaPourcent = 10;
         }
-        // Exemple : si user tape 550 => on l'interprète comme 5.5
         if (tvaPourcent > 100) {
           tvaPourcent = tvaPourcent / 100;
         }
-        // Borne le taux entre 5.5 et 20
         if (tvaPourcent < 5.5) tvaPourcent = 5.5;
         if (tvaPourcent > 20) tvaPourcent = 20;
 
         updated["TAUX TVA"] = String(tvaPourcent);
       }
 
-      // 2B. Recalcul du MONTANT HT si "MONTANT TTC" ou "TAUX TVA" changent
+      // 2B) Recalcul Montant HT
       if (name === "MONTANT TTC" || name === "TAUX TVA") {
         const montantTTC = parseFloat(updated["MONTANT TTC"]) || 0;
-        const tvaPourcent = parseFloat(updated["TAUX TVA"]) || (TVA_RATE_DEFAULT * 100);
+        const tvaPourcent =
+          parseFloat(updated["TAUX TVA"]) || TVA_RATE_DEFAULT * 100;
         const tvaDecimal = tvaPourcent / 100;
 
         const ht = montantTTC / (1 + tvaDecimal);
         updated["MONTANT HT"] = ht > 0 ? ht.toFixed(2) : "0.00";
       }
 
-      // 2C. (Optionnel) Valider "NUMERO BC" si besoin
-      // ex: limiter à 6 chiffres, etc.
+      // 2C) Si on veut "NUMERO BC" = "MONTANT TTC"
+      // => On copie la valeur
+      if (name === "MONTANT TTC") {
+        updated["NUMERO BC"] = value;
+      }
 
       return updated;
     });
   }
 
-  // ------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────
   // 3. Sauvegarde (PUT /api/ventes/:id)
-  // ------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────
   async function handleSave(e) {
     e.preventDefault();
     if (!sale) return;
 
-    // Vérifie la présence de champs obligatoires
+    // Vérifie champs obligatoires
     const missing = REQUIRED_FIELDS.filter(
       (field) => !sale[field] || sale[field].trim() === ""
     );
@@ -183,7 +179,7 @@ export default function EditSale() {
       return;
     }
 
-    // Convertit les dates en ISO avant l'envoi (MongoDB attend une string)
+    // Convertit les dates => ISO
     sale["DATE DE VENTE"] = saleDate ? saleDate.toISOString() : "";
     sale["PREVISION CHANTIER"] = prevChantierDate
       ? prevChantierDate.toISOString()
@@ -201,9 +197,10 @@ export default function EditSale() {
         throw new Error(errData.message || `Erreur : ${res.status}`);
       }
 
-      setNotification({ type: "success", message: "Vente mise à jour avec succès !" });
-
-      // Optionnel : redirection après 1.5 seconde
+      setNotification({
+        type: "success",
+        message: "Vente mise à jour avec succès !",
+      });
       setTimeout(() => {
         router.back();
       }, 1500);
@@ -212,18 +209,14 @@ export default function EditSale() {
     }
   }
 
-  // ------------------------------------------------------------------
-  // 4. Gestion du CSV (Copie / Téléchargement)
-  // ------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────
+  // 4. CSV (copie / téléchargement)
+  // ─────────────────────────────────────────────────────────
   function handleCopyCSV() {
     if (!sale) return;
-
-    // On filtre les champs à exclure
     const entries = Object.entries(sale).filter(
       ([key]) => !EXCLUDED_FIELDS.includes(key)
     );
-
-    // On construit une seule ligne CSV (pas de headers)
     const line = entries.map(([_, v]) => (v == null ? "" : v)).join(";");
 
     navigator.clipboard
@@ -244,8 +237,6 @@ export default function EditSale() {
 
   function handleDownloadCSV() {
     if (!sale) return;
-
-    // Crée un CSV à 2 lignes : la 1ère pour les champs, la 2ème pour les valeurs
     const entries = Object.entries(sale).filter(
       ([key]) => !EXCLUDED_FIELDS.includes(key)
     );
@@ -256,7 +247,6 @@ export default function EditSale() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
 
-    // Création d'un lien "virtuel" pour forcer le téléchargement
     const a = document.createElement("a");
     a.href = url;
     a.download = `vente_${id}.csv`;
@@ -265,16 +255,16 @@ export default function EditSale() {
     document.body.removeChild(a);
   }
 
-  // ------------------------------------------------------------------
-  // 5. Accès au fichier (ex: un PDF), redirection
-  // ------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────
+  // 5. Accès Fichier
+  // ─────────────────────────────────────────────────────────
   function handleFileAction(saleId) {
     router.push(`/file/details/${saleId}`);
   }
 
-  // ------------------------------------------------------------------
-  // 6. Gestion du chargement / erreur
-  // ------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────
+  // 6. Chargement / Erreur
+  // ─────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -291,13 +281,12 @@ export default function EditSale() {
   }
   if (!sale) return null;
 
-  // Fusion entre l'objet récupéré (sale) et les valeurs par défaut
-  // pour éviter les "undefined" si la BDD ne renvoie pas tous les champs
+  // Fusion objet récupéré + valeurs par défaut
   const currentSale = { ...DEFAULT_SALE, ...sale };
 
-  // ------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────
   // 7. Rendu du formulaire
-  // ------------------------------------------------------------------
+  // ─────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-200 to-gray-600">
       <Navbar />
@@ -307,7 +296,7 @@ export default function EditSale() {
           Compléter la vente
         </h2>
 
-        {/* Notification d'erreur ou de succès */}
+        {/* Notification */}
         {notification && (
           <div
             className={`p-4 rounded-md mb-6 ${
@@ -338,10 +327,10 @@ export default function EditSale() {
               />
             </div>
 
-            {/* NUMERO BC → Saisi librement */}
+            {/* NUMERO BC : mis à jour quand "MONTANT TTC" change */}
             <div>
               <label className="block text-gray-800 font-semibold mb-2">
-                NUMERO BC
+                NUMERO BC (identique à Montant TTC)
               </label>
               <input
                 type="text"
@@ -516,7 +505,7 @@ export default function EditSale() {
             {/* MONTANT HT (lecture seule) */}
             <div>
               <label className="block text-gray-800 font-semibold mb-2">
-                Montant HT (Calculé)
+                Montant HT (calculé)
               </label>
               <input
                 type="text"
@@ -577,7 +566,7 @@ export default function EditSale() {
               </select>
             </div>
 
-            {/* Prévision Chantier (DatePicker) */}
+            {/* Prévision Chantier */}
             <div>
               <label className="block text-gray-800 font-semibold mb-2">
                 Prévision Chantier
@@ -607,7 +596,7 @@ export default function EditSale() {
 
           {/* Boutons d'action */}
           <div className="flex flex-wrap justify-center gap-4 mt-6">
-            {/* Valider : sauvegarde en base */}
+            {/* Valider */}
             <button
               type="submit"
               className="bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600"
@@ -615,7 +604,7 @@ export default function EditSale() {
               <FontAwesomeIcon icon={faSave} /> Valider
             </button>
 
-            {/* Ouvrir la page Fichier (ex: PDF) */}
+            {/* Fichier */}
             <button
               type="button"
               onClick={() => handleFileAction(id)}
