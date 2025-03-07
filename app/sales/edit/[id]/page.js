@@ -13,8 +13,6 @@ import {
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
-// --- Constantes de configuration -----------------------------------
-
 // Taux TVA par défaut (ex. 0.2 => 20%)
 const TVA_RATE_DEFAULT = 0.2;
 
@@ -37,7 +35,7 @@ const DEFAULT_SALE = {
   TELEPHONE: "",
   VENDEUR: "",
   DESIGNATION: "",
-  "TAUX TVA": "10",  // Par défaut 10%
+  "TAUX TVA": "10",   // Par défaut 10%
   "MONTANT HT": "",
   "MONTANT TTC": "",
   "MONTANT ANNULE": "",
@@ -47,7 +45,8 @@ const DEFAULT_SALE = {
 };
 
 /**
- * Convertit une chaîne ISO en objet Date (ou null si invalide).
+ * Convertit une chaîne ISO (ex: "2025-03-05T10:00:00.000Z")
+ * en objet Date (ou null si invalide).
  */
 function parseISODate(str) {
   if (!str) return null;
@@ -56,15 +55,15 @@ function parseISODate(str) {
 }
 
 export default function EditSale() {
-  const { id } = useParams();           
+  const { id } = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const saleDateParam = searchParams.get("date");
 
-  // État de la vente
+  // État principal : la vente
   const [sale, setSale] = useState(null);
 
-  // Dates pour react-datepicker
+  // Dates utilisées par react-datepicker
   const [saleDate, setSaleDate] = useState(null);
   const [prevChantierDate, setPrevChantierDate] = useState(null);
 
@@ -74,23 +73,27 @@ export default function EditSale() {
   const [notification, setNotification] = useState(null);
 
   // ─────────────────────────────────────────────────────────
-  // 1. Récupération (GET /api/ventes/:id)
+  // 1. Récupération de la vente (GET /api/ventes/:id)
   // ─────────────────────────────────────────────────────────
   useEffect(() => {
     async function fetchSale() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/ventes/${id}`, { credentials: "include" });
+        const res = await fetch(`/api/ventes/${id}`, {
+          credentials: "include",
+        });
         if (!res.ok) {
           throw new Error(`Échec de la récupération : ${res.status}`);
         }
-        const data = await res.json();
-        const vente = data.data;
 
-        // Convertit en Date
+        const data = await res.json();
+        const vente = data.data; // Objet renvoyé par la BDD
+
+        // Convertit en Date les champs date si existants
         const dateDeVente = parseISODate(vente["DATE DE VENTE"]);
         const prevDateChantier = parseISODate(vente["PREVISION CHANTIER"]);
 
+        // Si la vente n’a pas "DATE DE VENTE", on tente ?date=... ou date du jour
         if (dateDeVente) {
           setSaleDate(dateDeVente);
         } else if (saleDateParam) {
@@ -100,6 +103,7 @@ export default function EditSale() {
           setSaleDate(new Date());
         }
 
+        // Pareil pour PREVISION CHANTIER
         if (prevDateChantier) {
           setPrevChantierDate(prevDateChantier);
         }
@@ -111,11 +115,12 @@ export default function EditSale() {
         setLoading(false);
       }
     }
+
     fetchSale();
   }, [id, saleDateParam]);
 
   // ─────────────────────────────────────────────────────────
-  // 2. Gère les changements d'inputs
+  // 2. Gère les changements d'inputs (champ par champ)
   // ─────────────────────────────────────────────────────────
   function handleInputChange(e) {
     if (!sale) return;
@@ -124,37 +129,38 @@ export default function EditSale() {
     setSale((prev) => {
       const updated = { ...prev, [name]: value };
 
-      // 2A) Gestion TVA
+      // A) Gestion de la TVA
       if (name === "TAUX TVA") {
         let tvaPourcent = parseFloat(value);
         if (isNaN(tvaPourcent)) {
-          tvaPourcent = 10;
+          tvaPourcent = 10; // Valeur par défaut si champ vide
         }
+        // ex : si user tape 550 => 5.5
         if (tvaPourcent > 100) {
           tvaPourcent = tvaPourcent / 100;
         }
+        // Borne le taux entre 5.5 et 20
         if (tvaPourcent < 5.5) tvaPourcent = 5.5;
         if (tvaPourcent > 20) tvaPourcent = 20;
 
         updated["TAUX TVA"] = String(tvaPourcent);
       }
 
-      // 2B) Recalcul Montant HT
+      // B) Recalcul du MONTANT HT si "MONTANT TTC" ou "TAUX TVA" changent
       if (name === "MONTANT TTC" || name === "TAUX TVA") {
-        const montantTTC = parseFloat(updated["MONTANT TTC"]) || 0;
+        const montantTTC =
+          parseFloat(updated["MONTANT TTC"]) || 0;
         const tvaPourcent =
           parseFloat(updated["TAUX TVA"]) || TVA_RATE_DEFAULT * 100;
         const tvaDecimal = tvaPourcent / 100;
 
+        // MONTANT HT = MONTANT TTC / (1 + TVA)
         const ht = montantTTC / (1 + tvaDecimal);
         updated["MONTANT HT"] = ht > 0 ? ht.toFixed(2) : "0.00";
       }
 
-      // 2C) Si on veut "NUMERO BC" = "MONTANT TTC"
-      // => On copie la valeur
-      if (name === "MONTANT TTC") {
-        updated["NUMERO BC"] = value;
-      }
+      // Pas de lien entre "NUMERO BC" et autre chose, 
+      // donc on ne touche pas "NUMERO BC" ici.
 
       return updated;
     });
@@ -167,7 +173,7 @@ export default function EditSale() {
     e.preventDefault();
     if (!sale) return;
 
-    // Vérifie champs obligatoires
+    // Vérifie la présence de champs obligatoires
     const missing = REQUIRED_FIELDS.filter(
       (field) => !sale[field] || sale[field].trim() === ""
     );
@@ -179,7 +185,7 @@ export default function EditSale() {
       return;
     }
 
-    // Convertit les dates => ISO
+    // Convertit les dates en ISO avant l'envoi (MongoDB attend une string)
     sale["DATE DE VENTE"] = saleDate ? saleDate.toISOString() : "";
     sale["PREVISION CHANTIER"] = prevChantierDate
       ? prevChantierDate.toISOString()
@@ -201,6 +207,8 @@ export default function EditSale() {
         type: "success",
         message: "Vente mise à jour avec succès !",
       });
+
+      // Optionnel : redirection après 1.5 seconde
       setTimeout(() => {
         router.back();
       }, 1500);
@@ -210,14 +218,20 @@ export default function EditSale() {
   }
 
   // ─────────────────────────────────────────────────────────
-  // 4. CSV (copie / téléchargement)
+  // 4. Gestion du CSV (Copie / Téléchargement)
   // ─────────────────────────────────────────────────────────
   function handleCopyCSV() {
     if (!sale) return;
+
+    // On filtre les champs à exclure
     const entries = Object.entries(sale).filter(
       ([key]) => !EXCLUDED_FIELDS.includes(key)
     );
-    const line = entries.map(([_, v]) => (v == null ? "" : v)).join(";");
+
+    // On construit une seule ligne CSV (pas de headers)
+    const line = entries
+      .map(([_, v]) => (v == null ? "" : v))
+      .join(";");
 
     navigator.clipboard
       .writeText(line)
@@ -237,6 +251,8 @@ export default function EditSale() {
 
   function handleDownloadCSV() {
     if (!sale) return;
+
+    // Crée un CSV à 2 lignes : la 1ère pour les champs, la 2ème pour les valeurs
     const entries = Object.entries(sale).filter(
       ([key]) => !EXCLUDED_FIELDS.includes(key)
     );
@@ -244,9 +260,12 @@ export default function EditSale() {
     const values = entries.map(([_, v]) => (v == null ? "" : v)).join(";");
     const csv = `${headers}\n${values}`;
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([csv], {
+      type: "text/csv;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
 
+    // Création d'un lien "virtuel" pour forcer le téléchargement
     const a = document.createElement("a");
     a.href = url;
     a.download = `vente_${id}.csv`;
@@ -256,14 +275,14 @@ export default function EditSale() {
   }
 
   // ─────────────────────────────────────────────────────────
-  // 5. Accès Fichier
+  // 5. Accès au fichier (ex: PDF)
   // ─────────────────────────────────────────────────────────
   function handleFileAction(saleId) {
     router.push(`/file/details/${saleId}`);
   }
 
   // ─────────────────────────────────────────────────────────
-  // 6. Chargement / Erreur
+  // 6. Gestion du chargement / erreur
   // ─────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -281,7 +300,7 @@ export default function EditSale() {
   }
   if (!sale) return null;
 
-  // Fusion objet récupéré + valeurs par défaut
+  // Fusion entre l'objet récupéré (sale) et les valeurs par défaut
   const currentSale = { ...DEFAULT_SALE, ...sale };
 
   // ─────────────────────────────────────────────────────────
@@ -327,10 +346,10 @@ export default function EditSale() {
               />
             </div>
 
-            {/* NUMERO BC : mis à jour quand "MONTANT TTC" change */}
+            {/* NUMERO BC (libre, sans copie d'aucun autre champ) */}
             <div>
               <label className="block text-gray-800 font-semibold mb-2">
-                NUMERO BC (identique à Montant TTC)
+                NUMERO BC
               </label>
               <input
                 type="text"
@@ -502,10 +521,10 @@ export default function EditSale() {
               </select>
             </div>
 
-            {/* MONTANT HT (lecture seule) */}
+            {/* MONTANT HT (recalculé, lecture seule) */}
             <div>
               <label className="block text-gray-800 font-semibold mb-2">
-                Montant HT (calculé)
+                MONTANT HT (calculé)
               </label>
               <input
                 type="text"
@@ -566,7 +585,7 @@ export default function EditSale() {
               </select>
             </div>
 
-            {/* Prévision Chantier */}
+            {/* PREVISION CHANTIER */}
             <div>
               <label className="block text-gray-800 font-semibold mb-2">
                 Prévision Chantier
