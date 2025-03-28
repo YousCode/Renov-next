@@ -16,31 +16,20 @@ import {
 import Confetti from "react-confetti";
 import useWindowSize from "react-use/lib/useWindowSize";
 
-/**
- * Removes accents and diacritics from a string,
- * e.g. "é" => "e", "ç" => "c".
- */
+// -----------------------------------------------
+// Fonctions utilitaires
+// -----------------------------------------------
 const normalizeString = (str) =>
   str
-    ? str
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
+    ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
     : "";
 
-/** 
- * Converts a date string into "dd/mm/yyyy" (French locale).
- * If the value is invalid, returns an empty string.
- */
 const formatDate = (dateStr) => {
   if (!dateStr) return "";
   const date = new Date(dateStr);
   return isNaN(date.getTime()) ? "" : date.toLocaleDateString("fr-FR");
 };
 
-/**
- * Formats a numeric value as currency (EUR, French locale).
- */
 const formatNumber = (value) => {
   const number = parseFloat(value);
   if (isNaN(number)) return value || "";
@@ -52,9 +41,6 @@ const formatNumber = (value) => {
   }).format(number);
 };
 
-/** 
- * Commission tiers for "BAREME COM": T1, T2, T3, T4, T5, T6.
- */
 function calculateCommission(sale) {
   const caHT = parseFloat(sale["MONTANT HT"]) || 0;
   let percent = 0.1;
@@ -83,9 +69,6 @@ function calculateCommission(sale) {
   return (caHT * percent).toFixed(2);
 }
 
-/**
- * Returns a background color for the row, based on "BAREME COM".
- */
 function getBaremeBgColor(bareme) {
   switch (bareme) {
     case "T1":
@@ -105,21 +88,12 @@ function getBaremeBgColor(bareme) {
   }
 }
 
-/**
- * Pre-process the fetched sales data:
- * - ensures MONTANT TTC / MONTANT HT are consistent if "TAUX TVA" is valid
- * - convert numeric TVA to "5,5%" style string
- * - fill missing fields
- * - deduplicate based on an identifier (so the same sale doesn't appear twice)
- * - clamp TauxTVA to a max of 20% (0.2)
- *   also handle "550" => 5.5% or "1000" => 10%
- */
 function processSalesData(salesData) {
   const uniqueSales = [];
   const seen = new Set();
 
   salesData.forEach((sale) => {
-    // Create a unique identifier to avoid duplicates
+    // Crée un identifiant unique pour éviter les doublons
     const identifier = `${normalizeString(sale["NOM DU CLIENT"])}|${formatDate(
       sale["DATE DE VENTE"]
     )}|${sale["MONTANT TTC"]}|${sale["VENDEUR"]}`;
@@ -129,71 +103,54 @@ function processSalesData(salesData) {
 
       let montantHT = parseFloat(sale["MONTANT HT"]);
       let montantTTC = parseFloat(sale["MONTANT TTC"]);
-      
-      // 1) Parse the raw TVA from the sale
-      let rawTaux = parseFloat(sale["TAUX TVA"]); 
+
+      let rawTaux = parseFloat(sale["TAUX TVA"]);
       if (isNaN(rawTaux) || rawTaux <= 0) {
-        // If invalid or <= 0, we'll assume "no valid TVA" => no conversion
         rawTaux = null;
       } else {
-        // 2) If user typed something like 0.1 => that’s obviously 0.1% => interpret as 10
-        //    Or if typed 550 => interpret as 5.5
-        //    So if rawTaux > 100, we divide by 100
         if (rawTaux > 100) {
-          rawTaux = rawTaux / 100; 
+          rawTaux = rawTaux / 100;
         }
-
-        // 3) Now clamp: min 5.5, max 20
         if (rawTaux < 5.5) {
           rawTaux = 5.5;
         }
         if (rawTaux > 20) {
           rawTaux = 20;
         }
-
-        // 4) Convert from “percent” to decimal. E.g. 10 => 0.10, 5.5 => 0.055
-        rawTaux = rawTaux / 100; 
+        rawTaux = rawTaux / 100;
       }
 
-      // Use rawTaux for Montant TTC ↔ Montant HT consistency
       if (rawTaux) {
-        // If Montant HT is known but Montant TTC is not
         if (isNaN(montantTTC) && !isNaN(montantHT)) {
           montantTTC = montantHT * (1 + rawTaux);
           sale["MONTANT TTC"] = montantTTC.toFixed(2);
         }
-        // If Montant TTC is known but Montant HT is not
         if (isNaN(montantHT) && !isNaN(montantTTC)) {
           montantHT = montantTTC / (1 + rawTaux);
           sale["MONTANT HT"] = montantHT.toFixed(2);
         }
       }
 
-      // If we still have NaN in both, zero them out
       if (isNaN(montantHT) && isNaN(montantTTC)) {
         sale["MONTANT HT"] = "0.00";
         sale["MONTANT TTC"] = "0.00";
       }
 
-      // 5) Convert the final decimal to a display string, e.g. 0.055 => “5,5%”
       if (rawTaux) {
         const displayPercent = (rawTaux * 100).toFixed(1).replace(".", ",") + "%";
-        sale["TAUX TVA"] = displayPercent; 
+        sale["TAUX TVA"] = displayPercent;
       } else {
-        sale["TAUX TVA"] = ""; 
+        sale["TAUX TVA"] = "";
       }
 
-      // If “PREVISION CHANTIER” missing, set to null for consistency
       if (!sale["PREVISION CHANTIER"]) {
         sale["PREVISION CHANTIER"] = null;
       }
 
-      // If “BAREME COM” missing, default to “T5” (example)
       if (!sale["BAREME COM"]) {
         sale["BAREME COM"] = "T5";
       }
 
-      // Recalculate “MONTANT COMMISSIONS” if you have that logic
       sale["MONTANT COMMISSIONS"] = calculateCommission(sale);
 
       uniqueSales.push(sale);
@@ -203,8 +160,29 @@ function processSalesData(salesData) {
   return uniqueSales;
 }
 
+// -------------------------------------------------
+// Nouvelle fonction pour calculer "MONTANT"
+// -------------------------------------------------
+const calculateMontant = (sale) => {
+  // Extraction de la valeur numérique dans "RESULTAT" (exemple : "DV+10000")
+  const resultStr = sale["RESULTAT"]
+    ? sale["RESULTAT"].replace(/[^0-9.-]+/g, "")
+    : "0";
+  const resultValue = parseFloat(resultStr) || 0;
+
+  // Extraction d’un nombre dans "ETAT" (s’il y a, par exemple dans "DV+10000")
+  const etatMatch = sale["ETAT"] ? sale["ETAT"].match(/\d+/) : null;
+  const etatValue = etatMatch ? parseFloat(etatMatch[0]) : 0;
+
+  return resultValue + etatValue;
+};
+
+// Nombre d'éléments par page pour la pagination
 const ITEMS_PER_PAGE = 500;
 
+// -------------------------------------------------
+// Composant principal AllSales
+// -------------------------------------------------
 const AllSales = () => {
   const [sales, setSales] = useState([]);
   const [displayedSales, setDisplayedSales] = useState([]);
@@ -227,7 +205,7 @@ const AllSales = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Save hidden sales in localStorage so they remain hidden on reload
+  // Gestion des ventes cachées via localStorage
   const [hiddenSales, setHiddenSales] = useState(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("hiddenSales");
@@ -240,7 +218,6 @@ const AllSales = () => {
   const { width, height } = useWindowSize();
   const tableRef = useRef(null);
 
-  // Fetch sales whenever month/year changes (if showAllSales is false, we filter after fetch)
   useEffect(() => {
     fetchSales();
   }, [selectedMonth, selectedYear]);
@@ -250,13 +227,10 @@ const AllSales = () => {
       setLoading(true);
       const response = await fetch("/api/ventes");
       if (!response.ok) {
-        throw new Error(
-          `Échec de la récupération des ventes : ${response.statusText}`
-        );
+        throw new Error(`Échec de la récupération des ventes : ${response.statusText}`);
       }
       const data = await response.json();
-
-      // Process the data (fix TVA, deduplicate, etc.)
+      // Traitement des données (fix TVA, déduplication, etc.)
       const processedSales = processSalesData(data.data);
       setSales(processedSales);
       filterSales(processedSales);
@@ -268,7 +242,6 @@ const AllSales = () => {
     }
   };
 
-  // Filter & sort the sales array based on searchTerm, date filters, etc.
   const filterSales = (salesData) => {
     let filtered = salesData.filter((sale) => {
       const saleDate = new Date(sale["DATE DE VENTE"]);
@@ -277,11 +250,9 @@ const AllSales = () => {
         : saleDate.getMonth() === selectedMonth &&
           saleDate.getFullYear() === selectedYear;
 
-      // We remove only hiddenSales, not "annule" ones. So annule stays visible
       if (!dateCondition) return false;
       if (hiddenSales.includes(sale._id)) return false;
 
-      // If there's a search term, match on various fields
       if (searchTerm) {
         const normalized = normalizeString(searchTerm);
         const matches =
@@ -292,11 +263,9 @@ const AllSales = () => {
           normalizeString(sale["DESIGNATION"] || "").includes(normalized);
         if (!matches) return false;
       }
-
       return true;
     });
 
-    // Sort
     filtered.sort((a, b) => {
       let valueA = a[sortField];
       let valueB = b[sortField];
@@ -317,7 +286,6 @@ const AllSales = () => {
       return 0;
     });
 
-    // Pagination
     setTotalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
@@ -325,10 +293,8 @@ const AllSales = () => {
     setDisplayedSales(paginatedSales);
   };
 
-  // Re-run filter whenever these states change
   useEffect(() => {
     filterSales(sales);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     showAllSales,
     selectedMonth,
@@ -353,7 +319,6 @@ const AllSales = () => {
     setIsModalOpen(true);
   };
 
-  // Add a new payment to the selectedSale
   const handleAddPayment = () => {
     if (!newPaymentAmount || !newPaymentDate) {
       alert("Veuillez remplir tous les champs de paiement.");
@@ -375,7 +340,7 @@ const AllSales = () => {
 
     setPayments((prev) => [...prev, newPayment]);
 
-    // Also update the main sales array so we keep them in memory
+    // Mise à jour de la vente dans le tableau global
     setSales((prevSales) =>
       prevSales.map((s) =>
         s._id === selectedSale._id
@@ -384,7 +349,6 @@ const AllSales = () => {
       )
     );
 
-    // Reset input fields
     setNewPaymentAmount("");
     setNewPaymentDate("");
     setNewPaymentComment("");
@@ -411,7 +375,6 @@ const AllSales = () => {
     }
   };
 
-  // Regex to find something like "123.45" or "123,45"
   const extractAmountFromText = (text) => {
     const regex = /(\d+[\.,\s]\d{2})/g;
     const matches = text.match(regex);
@@ -421,7 +384,6 @@ const AllSales = () => {
     return null;
   };
 
-  // Payment calculations
   const calculateTotalPaid = () =>
     payments.reduce((sum, payment) => sum + payment.montant, 0);
 
@@ -434,7 +396,6 @@ const AllSales = () => {
     return totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
   };
 
-  // Copy sale info to clipboard
   const handleCopySale = (sale) => {
     const saleData = `
 Date de Vente: ${formatDate(sale["DATE DE VENTE"])}
@@ -451,9 +412,7 @@ Désignation: ${sale["DESIGNATION"] || ""}
 Taux TVA: ${sale["TAUX TVA"] || ""}
 Montant TTC: ${formatNumber(sale["MONTANT TTC"])}
 Montant HT: ${formatNumber(sale["MONTANT HT"])}
-Prévision Chantier: ${
-      sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION CHANTIER"]) : ""
-    }
+Prévision Chantier: ${sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION CHANTIER"]) : ""}
 Observation: ${sale["OBSERVATION"] || ""}
     `;
     navigator.clipboard
@@ -465,7 +424,6 @@ Observation: ${sale["OBSERVATION"] || ""}
       });
   };
 
-  // Hide a sale from the table (store its _id in localStorage)
   const handleHideSale = (sale) => {
     const confirmation = confirm("Êtes-vous sûr de vouloir cacher cette vente ?");
     if (!confirmation) return;
@@ -473,7 +431,6 @@ Observation: ${sale["OBSERVATION"] || ""}
     setHiddenSales(updatedHiddenSales);
     localStorage.setItem("hiddenSales", JSON.stringify(updatedHiddenSales));
 
-    // Also remove it from displayed
     setSales((prevSales) => prevSales.filter((s) => s._id !== sale._id));
     setDisplayedSales((prevDisplayedSales) =>
       prevDisplayedSales.filter((s) => s._id !== sale._id)
@@ -481,7 +438,6 @@ Observation: ${sale["OBSERVATION"] || ""}
     alert("Vente cachée avec succès.");
   };
 
-  // Save changes to the selectedSale (PUT /api/ventes/:id)
   const handleSaveSale = async () => {
     try {
       const updatedSale = selectedSale;
@@ -497,11 +453,8 @@ Observation: ${sale["OBSERVATION"] || ""}
       }
 
       const data = await res.json();
-      // Update the local sales array with the returned data
       setSales((prevSales) =>
-        prevSales.map((sale) =>
-          sale._id === data.data._id ? data.data : sale
-        )
+        prevSales.map((sale) => (sale._id === data.data._id ? data.data : sale))
       );
       alert("Vente mise à jour avec succès !");
       setIsModalOpen(false);
@@ -511,27 +464,30 @@ Observation: ${sale["OBSERVATION"] || ""}
     }
   };
 
-  // Summation for MONTANT HT, ignoring annule
   const calculateTotalHT = () => {
     return displayedSales.reduce((sum, sale) => {
       const etatNormalized = normalizeString(sale.ETAT || "");
-      if (etatNormalized === "annule") return sum; // skip
+      if (etatNormalized === "annule") return sum;
       const montantHT = parseFloat(sale["MONTANT HT"]);
       return sum + (isNaN(montantHT) ? 0 : montantHT);
     }, 0);
   };
 
-  // Summation for MONTANT TTC, ignoring annule
   const calculateTotalTTC = () => {
     return displayedSales.reduce((sum, sale) => {
       const etatNormalized = normalizeString(sale.ETAT || "");
-      if (etatNormalized === "annule") return sum; // skip
+      if (etatNormalized === "annule") return sum;
       const montantTTC = parseFloat(sale["MONTANT TTC"]);
       return sum + (isNaN(montantTTC) ? 0 : montantTTC);
     }, 0);
   };
 
-  // Copies the displayed sales as CSV
+  const calculateTotalMontant = () => {
+    return displayedSales.reduce((sum, sale) => {
+      return sum + calculateMontant(sale);
+    }, 0);
+  };
+
   const handleCopyCSV = () => {
     if (displayedSales.length === 0) {
       alert("Aucune vente à copier.");
@@ -552,6 +508,8 @@ Observation: ${sale["OBSERVATION"] || ""}
       "TAUX TVA",
       "MONTANT TTC",
       "MONTANT HT",
+      "RESULTAT",
+      "ETAT",
       "PREVISION CHANTIER",
       "OBSERVATION",
     ];
@@ -570,7 +528,6 @@ Observation: ${sale["OBSERVATION"] || ""}
       .catch(() => alert("Erreur lors de la copie du CSV."));
   };
 
-  // Downloads the displayed sales as CSV
   const handleDownloadCSV = () => {
     if (displayedSales.length === 0) {
       alert("Aucune vente à télécharger.");
@@ -591,6 +548,8 @@ Observation: ${sale["OBSERVATION"] || ""}
       "TAUX TVA",
       "MONTANT TTC",
       "MONTANT HT",
+      "RESULTAT",
+      "ETAT",
       "PREVISION CHANTIER",
       "OBSERVATION",
     ];
@@ -637,7 +596,7 @@ Observation: ${sale["OBSERVATION"] || ""}
 
   return (
     <div className="min-h-screen flex flex-col items-center bg-gray-800 p-2 font-arial text-[10px]">
-      {/* Top controls */}
+      {/* Contrôles en haut */}
       <div className="flex flex-col items-center w-full mb-2">
         <button
           onClick={() => router.back()}
@@ -651,7 +610,6 @@ Observation: ${sale["OBSERVATION"] || ""}
         >
           {showAllSales ? "Afficher mensuelles" : "Afficher toutes"}
         </button>
-        {/* Search */}
         <div className="flex flex-col md:flex-row items-center justify-center w-full mb-1 space-y-1 md:space-y-0">
           <input
             type="text"
@@ -661,7 +619,6 @@ Observation: ${sale["OBSERVATION"] || ""}
             className="w-full md:w-1/2 p-1 border border-gray-300 rounded text-[10px]"
           />
         </div>
-        {/* Sort & CSV actions */}
         <div className="flex flex-wrap items-center justify-center w-full mb-1 space-x-1">
           <label className="text-white text-[10px]">Trier par:</label>
           <select
@@ -702,31 +659,34 @@ Observation: ${sale["OBSERVATION"] || ""}
         </div>
       </div>
 
-      {/* Table */}
+      {/* Affichage du tableau */}
       <div className="w-full overflow-x-auto mb-8">
         <table ref={tableRef} className="min-w-full bg-white text-gray-800 text-[10px]">
-          <thead className="bg-gray-700 text-white">
-            {showAllSales ? (
+          {showAllSales ? (
+            <thead className="bg-gray-700 text-white">
               <tr>
-                <th>DATE DE VENTE</th>
-                <th>NOM DU CLIENT</th>
-                <th>prenom</th>
-                <th>BC</th>
-                <th>ADRESSE DU CLIENT</th>
-                <th>CODE INTERP etage</th>
-                <th>VILLE</th>
-                <th>CP</th>
-                <th>TELEPHONE</th>
-                <th>VENDEUR</th>
-                <th>DESIGNATION</th>
-                <th>TAUX TVA</th>
-                <th>MONTANT TTC</th>
-                <th>MONTANT HT</th>
-                <th>PREVISION CHANTIER</th>
-                <th>OBSERVATION</th>
-                <th>Actions</th>
+                <th className="border px-1 py-1">DATE DE VENTE</th>
+                <th className="border px-1 py-1">NOM DU CLIENT</th>
+                <th className="border px-1 py-1">prenom</th>
+                <th className="border px-1 py-1">NUMERO BC</th>
+                <th className="border px-1 py-1">ADRESSE DU CLIENT</th>
+                <th className="border px-1 py-1">CODE INTERP etage</th>
+                <th className="border px-1 py-1">VILLE</th>
+                <th className="border px-1 py-1">CP</th>
+                <th className="border px-1 py-1">TELEPHONE</th>
+                <th className="border px-1 py-1">VENDEUR</th>
+                <th className="border px-1 py-1">DESIGNATION</th>
+                <th className="border px-1 py-1">TAUX TVA</th>
+                <th className="border px-1 py-1">MONTANT TTC</th>
+                <th className="border px-1 py-1">MONTANT HT</th>
+                <th className="border px-1 py-1">MONTANT</th>
+                <th className="border px-1 py-1">PREVISION CHANTIER</th>
+                <th className="border px-1 py-1">OBSERVATION</th>
+                <th className="border px-1 py-1">Actions</th>
               </tr>
-            ) : (
+            </thead>
+          ) : (
+            <thead className="bg-gray-700 text-white">
               <tr>
                 <th>Date vente</th>
                 <th>Client</th>
@@ -736,26 +696,22 @@ Observation: ${sale["OBSERVATION"] || ""}
                 <th>Montant vente TTC (€)</th>
                 <th>TVA</th>
                 <th>CA HT (€)</th>
+                <th>MONTANT</th>
                 <th>Barème COM</th>
                 <th>Montant commissions en €</th>
                 <th>Actions</th>
               </tr>
-            )}
-          </thead>
-          <tbody>
+            </thead>
+          )}
+          <tbody className="bg-white">
             {displayedSales.map((sale) => {
               const etatNormalized = normalizeString(sale.ETAT || "");
               let rowClass = "";
-
-              // Keep annule in the table, but mark them red & blinking
               if (etatNormalized === "annule") {
                 rowClass = "bg-red-200 animate-blink";
               } else if (!sale["ADRESSE DU CLIENT"] || !sale.VILLE) {
-                // If missing address or city, highlight in blinking yellow
                 rowClass = "animate-blink-yellow";
               }
-
-              // Payment progress bar
               const totalPaid = (sale.payments || []).reduce(
                 (sum, p) => sum + parseFloat(p.montant),
                 0
@@ -764,8 +720,7 @@ Observation: ${sale["OBSERVATION"] || ""}
                 parseFloat(sale["MONTANT TTC"]) ||
                 parseFloat(sale["MONTANT HT"]) ||
                 0;
-              const rowProgress =
-                totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
+              const rowProgress = totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
 
               return (
                 <tr
@@ -774,58 +729,26 @@ Observation: ${sale["OBSERVATION"] || ""}
                   onDoubleClick={() => handleRowDoubleClick(sale)}
                 >
                   {showAllSales ? (
-                    // Show Full Table
                     <>
+                      <td className="border px-1 py-1">{formatDate(sale["DATE DE VENTE"])}</td>
+                      <td className="border px-1 py-1">{sale["NOM DU CLIENT"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["prenom"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["NUMERO BC"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["ADRESSE DU CLIENT"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["CODE INTERP etage"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["VILLE"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["CP"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["TELEPHONE"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["VENDEUR"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["DESIGNATION"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["TAUX TVA"] || ""}</td>
+                      <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT TTC"])}</td>
+                      <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT HT"])}</td>
+                      <td className="border px-1 py-1 text-right">{formatNumber(calculateMontant(sale))}</td>
                       <td className="border px-1 py-1">
-                        {formatDate(sale["DATE DE VENTE"])}
+                        {sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION CHANTIER"]) : ""}
                       </td>
-                      <td className="border px-1 py-1">
-                        {sale["NOM DU CLIENT"] || ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["prenom"] || ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["NUMERO BC"] || ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["ADRESSE DU CLIENT"] || ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["CODE INTERP etage"] || ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["VILLE"] || ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["CP"] || ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["TELEPHONE"] || ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["VENDEUR"] || ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["DESIGNATION"] || ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["TAUX TVA"] || ""}
-                      </td>
-                      <td className="border px-1 py-1 text-right">
-                        {formatNumber(sale["MONTANT TTC"])}
-                      </td>
-                      <td className="border px-1 py-1 text-right">
-                        {formatNumber(sale["MONTANT HT"])}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["PREVISION CHANTIER"]
-                          ? formatDate(sale["PREVISION CHANTIER"])
-                          : ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["OBSERVATION"] || ""}
-                      </td>
+                      <td className="border px-1 py-1">{sale["OBSERVATION"] || ""}</td>
                       <td className="border px-1 py-1 flex justify-center space-x-1">
                         <button
                           onClick={() => router.push(`/sales/edit/${sale._id}`)}
@@ -865,11 +788,9 @@ Observation: ${sale["OBSERVATION"] || ""}
                       </td>
                     </>
                   ) : (
-                    // Show Monthly Simplified Table
                     <>
                       <td className="border px-1 py-1 relative">
                         {formatDate(sale["DATE DE VENTE"])}
-                        {/* Payment progress bar below */}
                         <div className="absolute bottom-0 left-0 w-full">
                           <div className="w-full bg-gray-300 h-1">
                             <div
@@ -879,46 +800,23 @@ Observation: ${sale["OBSERVATION"] || ""}
                           </div>
                         </div>
                       </td>
-                      <td className="border px-1 py-1">
-                        {sale["NOM DU CLIENT"] || ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["VENDEUR"] || "Inconnu"}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["NUMERO BC"] || ""}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["DESIGNATION"] || "N/A"}
-                      </td>
-                      <td className="border px-1 py-1 text-right">
-                        {formatNumber(sale["MONTANT TTC"])}
-                      </td>
-                      <td className="border px-1 py-1">
-                        {sale["TAUX TVA"] || "N/A"}
-                      </td>
-                      <td className="border px-1 py-1 text-right">
-                        {formatNumber(sale["MONTANT HT"])}
-                      </td>
-                      <td
-                        className={`border px-1 py-1 ${getBaremeBgColor(
-                          sale["BAREME COM"]
-                        )}`}
-                      >
+                      <td className="border px-1 py-1">{sale["NOM DU CLIENT"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["VENDEUR"] || "Inconnu"}</td>
+                      <td className="border px-1 py-1">{sale["NUMERO BC"] || ""}</td>
+                      <td className="border px-1 py-1">{sale["DESIGNATION"] || "N/A"}</td>
+                      <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT TTC"])}</td>
+                      <td className="border px-1 py-1">{sale["TAUX TVA"] || "N/A"}</td>
+                      <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT HT"])}</td>
+                      <td className="border px-1 py-1 text-right">{formatNumber(calculateMontant(sale))}</td>
+                      <td className={`border px-1 py-1 ${getBaremeBgColor(sale["BAREME COM"])}`}>
                         <select
                           value={sale["BAREME COM"]}
                           onChange={(e) => {
                             const newBareme = e.target.value;
-                            const updatedSale = {
-                              ...sale,
-                              "BAREME COM": newBareme,
-                            };
-                            updatedSale["MONTANT COMMISSIONS"] =
-                              calculateCommission(updatedSale);
+                            const updatedSale = { ...sale, "BAREME COM": newBareme };
+                            updatedSale["MONTANT COMMISSIONS"] = calculateCommission(updatedSale);
                             setSales((prev) =>
-                              prev.map((s) =>
-                                s._id === sale._id ? updatedSale : s
-                              )
+                              prev.map((s) => (s._id === sale._id ? updatedSale : s))
                             );
                           }}
                           className="p-1 border border-gray-300 rounded text-[10px]"
@@ -978,23 +876,16 @@ Observation: ${sale["OBSERVATION"] || ""}
                 </tr>
               );
             })}
-
-            {/* Totals row */}
             {showAllSales ? (
               <tr
                 className="bg-gray-200 font-bold cursor-pointer"
                 onMouseEnter={() => setShowConfetti(true)}
                 onMouseLeave={() => setShowConfetti(false)}
               >
-                <td colSpan="12" className="border px-1 py-1 text-right">
-                  Totaux :
-                </td>
-                <td className="border px-1 py-1 text-right">
-                  {formatNumber(calculateTotalTTC())}
-                </td>
-                <td className="border px-1 py-1 text-right">
-                  {formatNumber(calculateTotalHT())}
-                </td>
+                <td colSpan="12" className="border px-1 py-1 text-right">Totaux :</td>
+                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalTTC())}</td>
+                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalHT())}</td>
+                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalMontant())}</td>
                 <td colSpan="3" className="border px-1 py-1"></td>
               </tr>
             ) : (
@@ -1003,16 +894,11 @@ Observation: ${sale["OBSERVATION"] || ""}
                 onMouseEnter={() => setShowConfetti(true)}
                 onMouseLeave={() => setShowConfetti(false)}
               >
-                <td colSpan="5" className="border px-1 py-1 text-right">
-                  Totaux :
-                </td>
-                <td className="border px-1 py-1 text-right">
-                  {formatNumber(calculateTotalTTC())}
-                </td>
+                <td colSpan="5" className="border px-1 py-1 text-right">Totaux :</td>
+                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalTTC())}</td>
                 <td className="border px-1 py-1"></td>
-                <td className="border px-1 py-1 text-right">
-                  {formatNumber(calculateTotalHT())}
-                </td>
+                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalHT())}</td>
+                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalMontant())}</td>
                 <td colSpan="3" className="border px-1 py-1"></td>
               </tr>
             )}
@@ -1020,33 +906,8 @@ Observation: ${sale["OBSERVATION"] || ""}
         </table>
       </div>
 
-      {/* Pagination */}
-      <div className="flex justify-center items-center space-x-1 mt-2 text-[10px]">
-        <button
-          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-          disabled={currentPage === 1}
-          className="px-1 py-1 bg-gray-500 text-white rounded disabled:opacity-50 text-[10px]"
-        >
-          Précédent
-        </button>
-        <span className="text-white text-[10px]">
-          Page {currentPage} sur {totalPages}
-        </span>
-        <button
-          onClick={() =>
-            setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-          }
-          disabled={currentPage === totalPages}
-          className="px-1 py-1 bg-gray-500 text-white rounded disabled:opacity-50 text-[10px]"
-        >
-          Suivant
-        </button>
-      </div>
-
-      {/* Confetti for the totals row hover */}
       {showConfetti && <Confetti width={width} height={height} />}
 
-      {/* Modal for payments */}
       {isModalOpen && selectedSale && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <div className="bg-white w-11/12 md:w-2/3 lg:w-1/2 p-2 rounded-lg overflow-y-auto max-h-screen text-[10px]">
@@ -1061,8 +922,6 @@ Observation: ${sale["OBSERVATION"] || ""}
                 <FontAwesomeIcon icon={faTimes} size="lg" />
               </button>
             </div>
-
-            {/* Vente overview */}
             <div className="mb-2 border-b pb-1">
               <h3 className="text-xs font-semibold mb-1">Aperçu de la Vente</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-[10px]">
@@ -1114,29 +973,21 @@ Observation: ${sale["OBSERVATION"] || ""}
                 </p>
               </div>
             </div>
-
-            {/* Prévision Chantier */}
             <div className="mb-2 text-[10px]">
               <h3 className="font-bold mb-1 text-xs">Prévision Chantier:</h3>
               <input
                 type="date"
                 value={selectedSale["PREVISION CHANTIER"] || ""}
                 onChange={(e) => {
-                  const updatedSale = {
-                    ...selectedSale,
-                    "PREVISION CHANTIER": e.target.value,
-                  };
+                  const updatedSale = { ...selectedSale, "PREVISION CHANTIER": e.target.value };
                   setSelectedSale(updatedSale);
                   setSales((prevSales) =>
-                    prevSales.map((s) =>
-                      s._id === updatedSale._id ? updatedSale : s
-                    )
+                    prevSales.map((s) => (s._id === updatedSale._id ? updatedSale : s))
                   );
                 }}
                 className="w-full p-1 border border-gray-300 rounded text-[10px]"
               />
             </div>
-
             <div className="mb-2 text-[10px]">
               <button
                 onClick={handleSaveSale}
@@ -1145,8 +996,6 @@ Observation: ${sale["OBSERVATION"] || ""}
                 Sauvegarder
               </button>
             </div>
-
-            {/* Payment progress */}
             <div className="mb-2 text-[10px]">
               <h3 className="font-bold mb-1 text-xs">Progression des Paiements :</h3>
               <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
@@ -1159,8 +1008,8 @@ Observation: ${sale["OBSERVATION"] || ""}
                 <span className="font-bold">Total:</span>{" "}
                 {formatNumber(
                   parseFloat(selectedSale["MONTANT TTC"]) ||
-                    parseFloat(selectedSale["MONTANT HT"]) ||
-                    0
+                  parseFloat(selectedSale["MONTANT HT"]) ||
+                  0
                 )}
               </p>
               <p>
@@ -1171,23 +1020,18 @@ Observation: ${sale["OBSERVATION"] || ""}
                 <span className="font-bold">Restant:</span>{" "}
                 {formatNumber(
                   (parseFloat(selectedSale["MONTANT TTC"]) ||
-                    parseFloat(selectedSale["MONTANT HT"]) ||
-                    0) - calculateTotalPaid()
+                  parseFloat(selectedSale["MONTANT HT"]) ||
+                  0) - calculateTotalPaid()
                 )}
               </p>
             </div>
-
-            {/* Payment history */}
             <div className="mb-2 text-[10px]">
               <h3 className="font-bold mb-1 text-xs">Historique des paiements:</h3>
               {payments.length > 0 ? (
                 <ul className="list-disc list-inside text-[10px]">
                   {payments.map((payment) => (
                     <li key={payment.id} className="mb-1">
-                      <span className="font-medium">
-                        {formatDate(payment.date)}
-                      </span>{" "}
-                      - {formatNumber(payment.montant)}
+                      <span className="font-medium">{formatDate(payment.date)}</span> - {formatNumber(payment.montant)}
                       {payment.comment && (
                         <p className="text-[9px] text-gray-600">
                           Commentaire : {payment.comment}
@@ -1200,8 +1044,6 @@ Observation: ${sale["OBSERVATION"] || ""}
                 <p>Aucun paiement.</p>
               )}
             </div>
-
-            {/* New payment form */}
             <div className="mb-2 text-[10px]">
               <h3 className="font-bold mb-1 text-xs">Ajouter un paiement:</h3>
               <div className="flex flex-col space-y-1">
@@ -1233,9 +1075,7 @@ Observation: ${sale["OBSERVATION"] || ""}
                     className="p-1 text-[10px]"
                   />
                   {ocrLoading && (
-                    <span className="ml-1 text-gray-600 text-[9px]">
-                      Analyse...
-                    </span>
+                    <span className="ml-1 text-gray-600 text-[9px]">Analyse...</span>
                   )}
                 </div>
                 <button
@@ -1250,7 +1090,7 @@ Observation: ${sale["OBSERVATION"] || ""}
         </div>
       )}
 
-      {/* Footer for monthly view: picks month & year */}
+      {/* Footer pour la vue mensuelle */}
       {!showAllSales && (
         <footer className="fixed bottom-0 left-0 w-full bg-gray-700 text-white py-1 flex flex-col md:flex-row justify-between items-center px-1 text-[10px]">
           <div className="flex space-x-1 overflow-x-auto mb-1 md:mb-0">
@@ -1295,18 +1135,12 @@ Observation: ${sale["OBSERVATION"] || ""}
         </footer>
       )}
 
-      {/* Blinking row animations */}
+      {/* Styles supplémentaires */}
       <style jsx>{`
         @keyframes blink {
-          0% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.5;
-          }
-          100% {
-            opacity: 1;
-          }
+          0% { opacity: 1; }
+          50% { opacity: 0.5; }
+          100% { opacity: 1; }
         }
         .animate-blink {
           animation: blink 1s infinite;
@@ -1316,18 +1150,11 @@ Observation: ${sale["OBSERVATION"] || ""}
           background-color: #fff3cd;
         }
         @keyframes blink-yellow {
-          0% {
-            background-color: #fff3cd;
-          }
-          50% {
-            background-color: #ffecb5;
-          }
-          100% {
-            background-color: #fff3cd;
-          }
+          0% { background-color: #fff3cd; }
+          50% { background-color: #ffecb5; }
+          100% { background-color: #fff3cd; }
         }
-        th,
-        td {
+        th, td {
           font-family: Arial, sans-serif;
           padding: 2px;
           border: 1px solid #d1d5db;
