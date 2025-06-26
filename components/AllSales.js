@@ -1,28 +1,44 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+// --------------------------------------------
+// AllSalesImproved.jsx – version sans la colonne « MONTANT »
+// --------------------------------------------
+
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
 import { useRouter } from "next/navigation";
 import Tesseract from "tesseract.js";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEdit,
   faFile,
-  faMoneyBillWave,
-  faTimes,
   faTrash,
   faCopy,
   faDownload,
+  faTimes,
 } from "@fortawesome/free-solid-svg-icons";
 import Confetti from "react-confetti";
 import useWindowSize from "react-use/lib/useWindowSize";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import clsx from "clsx";
 
 // -----------------------------------------------
-// Fonctions utilitaires
+// Constantes & Helpers
 // -----------------------------------------------
+const ITEMS_PER_PAGE = 500;
+
+const months = [
+  "Janvier","Février","Mars","Avril","Mai","Juin",
+  "Juillet","Août","Septembre","Octobre","Novembre","Décembre",
+];
+
 const normalizeString = (str) =>
-  str
-    ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-    : "";
+  str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "";
@@ -43,1128 +59,484 @@ const formatNumber = (value) => {
 
 function calculateCommission(sale) {
   const caHT = parseFloat(sale["MONTANT HT"]) || 0;
-  let percent = 0.1;
-  switch (sale["BAREME COM"]) {
-    case "T1":
-      percent = 0.2;
-      break;
-    case "T2":
-      percent = 0.17;
-      break;
-    case "T3":
-      percent = 0.15;
-      break;
-    case "T4":
-      percent = 0.12;
-      break;
-    case "T5":
-      percent = 0.1;
-      break;
-    case "T6":
-      percent = 0.06;
-      break;
-    default:
-      percent = 0.1;
-  }
+  const percent = { T1: 0.2, T2: 0.17, T3: 0.15, T4: 0.12, T5: 0.1, T6: 0.06 }[sale["BAREME COM"]] ?? 0.1;
   return (caHT * percent).toFixed(2);
 }
 
-function getBaremeBgColor(bareme) {
-  switch (bareme) {
-    case "T1":
-      return "bg-green-300";
-    case "T2":
-      return "bg-blue-300";
-    case "T3":
-      return "bg-purple-300";
-    case "T4":
-      return "bg-yellow-300";
-    case "T5":
-      return "";
-    case "T6":
-      return "bg-red-300";
-    default:
-      return "";
-  }
+function getBaremeBgColor(b) {
+  return { T1:"bg-green-300",T2:"bg-blue-300",T3:"bg-purple-300",T4:"bg-yellow-300",T6:"bg-red-300" }[b] || "";
 }
 
+// -------------------------------------------------
+// Nettoyage / déduplication
+// -------------------------------------------------
 function processSalesData(salesData) {
-  const uniqueSales = [];
-  const seen = new Set();
-
+  const unique = [], seen = new Set();
   salesData.forEach((sale) => {
-    // Crée un identifiant unique pour éviter les doublons
-    const identifier = `${normalizeString(sale["NOM DU CLIENT"])}|${formatDate(
-      sale["DATE DE VENTE"]
-    )}|${sale["MONTANT TTC"]}|${sale["VENDEUR"]}`;
+    const id = `${normalizeString(sale["NOM DU CLIENT"])}|${formatDate(sale["DATE DE VENTE"])}|${sale["MONTANT TTC"]}|${sale["VENDEUR"]}`;
+    if (seen.has(id)) return; seen.add(id);
 
-    if (!seen.has(identifier)) {
-      seen.add(identifier);
+    let ht = parseFloat(sale["MONTANT HT"]);
+    let ttc = parseFloat(sale["MONTANT TTC"]);
+    let taux = parseFloat(sale["TAUX TVA"]);
 
-      let montantHT = parseFloat(sale["MONTANT HT"]);
-      let montantTTC = parseFloat(sale["MONTANT TTC"]);
+    if (!isNaN(taux) && taux > 0) {
+      if (taux > 100) taux /= 100;
+      taux = Math.min(Math.max(taux, 0.055), 0.2);
+    } else taux = null;
 
-      let rawTaux = parseFloat(sale["TAUX TVA"]);
-      if (isNaN(rawTaux) || rawTaux <= 0) {
-        rawTaux = null;
-      } else {
-        if (rawTaux > 100) {
-          rawTaux = rawTaux / 100;
-        }
-        if (rawTaux < 5.5) {
-          rawTaux = 5.5;
-        }
-        if (rawTaux > 20) {
-          rawTaux = 20;
-        }
-        rawTaux = rawTaux / 100;
-      }
-
-      if (rawTaux) {
-        if (isNaN(montantTTC) && !isNaN(montantHT)) {
-          montantTTC = montantHT * (1 + rawTaux);
-          sale["MONTANT TTC"] = montantTTC.toFixed(2);
-        }
-        if (isNaN(montantHT) && !isNaN(montantTTC)) {
-          montantHT = montantTTC / (1 + rawTaux);
-          sale["MONTANT HT"] = montantHT.toFixed(2);
-        }
-      }
-
-      if (isNaN(montantHT) && isNaN(montantTTC)) {
-        sale["MONTANT HT"] = "0.00";
-        sale["MONTANT TTC"] = "0.00";
-      }
-
-      if (rawTaux) {
-        const displayPercent = (rawTaux * 100).toFixed(1).replace(".", ",") + "%";
-        sale["TAUX TVA"] = displayPercent;
-      } else {
-        sale["TAUX TVA"] = "";
-      }
-
-      if (!sale["PREVISION CHANTIER"]) {
-        sale["PREVISION CHANTIER"] = null;
-      }
-
-      if (!sale["BAREME COM"]) {
-        sale["BAREME COM"] = "T5";
-      }
-
-      sale["MONTANT COMMISSIONS"] = calculateCommission(sale);
-
-      uniqueSales.push(sale);
+    if (taux) {
+      if (isNaN(ttc) && !isNaN(ht)) ttc = ht * (1 + taux);
+      if (isNaN(ht) && !isNaN(ttc)) ht = ttc / (1 + taux);
     }
-  });
 
-  return uniqueSales;
+    sale["MONTANT HT"] = (ht ?? 0).toFixed(2);
+    sale["MONTANT TTC"] = (ttc ?? 0).toFixed(2);
+    sale["TAUX TVA"]      = taux ? `${(taux*100).toFixed(1).replace(".",",")} %` : "";
+    sale["BAREME COM"]    = sale["BAREME COM"] || "T5";
+    sale["MONTANT COMMISSIONS"] = calculateCommission(sale);
+
+    unique.push(sale);
+  });
+  return unique;
 }
 
-// -------------------------------------------------
-// Nouvelle fonction pour calculer "MONTANT"
-// -------------------------------------------------
-const calculateMontant = (sale) => {
-  // Extraction de la valeur numérique dans "RESULTAT" (exemple : "DV+10000")
-  const resultStr = sale["RESULTAT"]
-    ? sale["RESULTAT"].replace(/[^0-9.-]+/g, "")
-    : "0";
-  const resultValue = parseFloat(resultStr) || 0;
+// ------------------------------------------------------------------
+// Loader
+// ------------------------------------------------------------------
+const Loader = () => (
+  <div className="flex items-center justify-center py-8">
+    <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600" />
+  </div>
+);
 
-  // Extraction d’un nombre dans "ETAT" (s’il y a, par exemple dans "DV+10000")
-  const etatMatch = sale["ETAT"] ? sale["ETAT"].match(/\d+/) : null;
-  const etatValue = etatMatch ? parseFloat(etatMatch[0]) : 0;
+// ------------------------------------------------------------------
+// Barre de filtres & contrôles
+// ------------------------------------------------------------------
+const FiltersBar = ({
+  showAllSales,toggleShowAll,
+  searchTerm,onSearchChange,
+  sortField,setSortField,
+  sortOrder,setSortOrder,
+  copyCSV,downloadCSV,
+  selectedMonth,setSelectedMonth,
+  selectedYear,setSelectedYear,
+}) => (
+  <div className="flex flex-col items-center w-full mb-2 text-[10px]">
+    <div className="flex flex-wrap items-center justify-center gap-1 mb-1">
+      <button onClick={toggleShowAll} className="px-2 py-1 bg-blue-500 text-white rounded">
+        {showAllSales ? "Afficher mensuelles" : "Afficher toutes"}
+      </button>
+      <input
+        value={searchTerm} onChange={onSearchChange}
+        placeholder="Rechercher"
+        className="w-40 p-1 border border-gray-300 rounded"
+        aria-label="Rechercher"
+      />
+      <select value={sortField} onChange={e=>setSortField(e.target.value)} className="p-1 border rounded">
+        {["DATE DE VENTE","NOM DU CLIENT","MONTANT HT","MONTANT TTC","VENDEUR","DESIGNATION","PREVISION CHANTIER"]
+          .map(f=>(<option key={f} value={f}>{f}</option>))}
+      </select>
+      <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)} className="p-1 border rounded">
+        <option value="asc">Asc</option><option value="desc">Desc</option>
+      </select>
+      <button onClick={copyCSV} className="px-2 py-1 bg-purple-500 text-white rounded" title="Copier CSV">
+        <FontAwesomeIcon icon={faCopy}/>
+      </button>
+      <button onClick={downloadCSV} className="px-2 py-1 bg-green-500 text-white rounded" title="Télécharger CSV">
+        <FontAwesomeIcon icon={faDownload}/>
+      </button>
+    </div>
 
-  return resultValue + etatValue;
-};
+    {!showAllSales && (
+      <div className="flex gap-1 flex-wrap justify-center">
+        {months.map((m,i)=>(
+          <button key={m} onClick={()=>setSelectedMonth(i)}
+            className={clsx("px-1 py-1 rounded whitespace-nowrap",
+              selectedMonth===i?"bg-blue-500 text-white":"bg-gray-600 text-white")}>
+            {m}
+          </button>
+        ))}
+        <select value={selectedYear} onChange={e=>setSelectedYear(+e.target.value)} className="p-1 bg-gray-600 text-white rounded">
+          {Array.from({length:10},(_,k)=>new Date().getFullYear()-k).map(y=>(
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+      </div>
+    )}
+  </div>
+);
 
-// Nombre d'éléments par page pour la pagination
-const ITEMS_PER_PAGE = 500;
+// ------------------------------------------------------------------
+// Tableau des ventes
+// ------------------------------------------------------------------
+const SalesTable = ({
+  sales,showAllSales,onDoubleClick,onEdit,onDetails,onCopy,onHide,
+}) => (
+  <div className="w-full overflow-x-auto mb-8 text-[10px]">
+    <table className="min-w-full bg-white text-gray-800">
+      <thead className="bg-gray-700 text-white">
+        {showAllSales ? (
+          <tr>{[
+            "DATE DE VENTE","NOM DU CLIENT","prenom","NUMERO BC","ADRESSE DU CLIENT",
+            "CODE INTERP etage","VILLE","CP","TELEPHONE","VENDEUR",
+            "DESIGNATION","TAUX TVA","MONTANT TTC","MONTANT HT",
+            "PREVISION CHANTIER","OBSERVATION","Actions",
+          ].map(h=><th key={h} className="border px-1 py-1">{h}</th>)}</tr>
+        ) : (
+          <tr>{[
+            "Date vente","Client","VENDEUR","BC","désignation produit",
+            "Montant vente TTC (€)","TVA","CA HT (€)","Barème COM",
+            "Montant commissions en €","Actions",
+          ].map(h=><th key={h} className="border px-1 py-1">{h}</th>)}</tr>
+        )}
+      </thead>
+      <tbody>
+        {sales.map((sale)=>{
+          const cancelled = normalizeString(sale.ETAT)==="annule";
+          const warnAddr  = !sale["ADRESSE DU CLIENT"] || !sale.VILLE;
+          const rowClass  = clsx({"bg-red-200 animate-pulse":cancelled,"animate-pulse bg-yellow-100":warnAddr});
+          const ttc = parseFloat(sale["MONTANT TTC"])||0,
+                ht  = parseFloat(sale["MONTANT HT"]) ||0,
+                paid = (sale.payments||[]).reduce((s,p)=>s+parseFloat(p.montant),0),
+                progress = ttc>0?paid/ttc*100:0;
 
-// -------------------------------------------------
-// Composant principal AllSales
-// -------------------------------------------------
-const AllSales = () => {
-  const [sales, setSales] = useState([]);
-  const [displayedSales, setDisplayedSales] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showAllSales, setShowAllSales] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortField, setSortField] = useState("DATE DE VENTE");
-  const [sortOrder, setSortOrder] = useState("asc");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedSale, setSelectedSale] = useState(null);
-  const [payments, setPayments] = useState([]);
-  const [newPaymentAmount, setNewPaymentAmount] = useState("");
-  const [newPaymentDate, setNewPaymentDate] = useState("");
-  const [newPaymentComment, setNewPaymentComment] = useState("");
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+          return (
+            <tr key={sale._id} className={`${rowClass} hover:bg-gray-100`} onDoubleClick={()=>onDoubleClick(sale)}>
+              {showAllSales ? (
+                <>
+                  <td className="border px-1 py-1">{formatDate(sale["DATE DE VENTE"])}</td>
+                  <td className="border px-1 py-1">{sale["NOM DU CLIENT"]}</td>
+                  <td className="border px-1 py-1">{sale["prenom"]||""}</td>
+                  <td className="border px-1 py-1">{sale["NUMERO BC"]}</td>
+                  <td className="border px-1 py-1">{sale["ADRESSE DU CLIENT"]}</td>
+                  <td className="border px-1 py-1">{sale["CODE INTERP etage"]}</td>
+                  <td className="border px-1 py-1">{sale["VILLE"]}</td>
+                  <td className="border px-1 py-1">{sale["CP"]}</td>
+                  <td className="border px-1 py-1">{sale["TELEPHONE"]}</td>
+                  <td className="border px-1 py-1">{sale["VENDEUR"]}</td>
+                  <td className="border px-1 py-1">{sale["DESIGNATION"]}</td>
+                  <td className="border px-1 py-1">{sale["TAUX TVA"]}</td>
+                  <td className="border px-1 py-1 text-right">{formatNumber(ttc)}</td>
+                  <td className="border px-1 py-1 text-right">{formatNumber(ht)}</td>
+                  <td className="border px-1 py-1">{sale["PREVISION CHANTIER"]?formatDate(sale["PREVISION CHANTIER"]):""}</td>
+                  <td className="border px-1 py-1">{sale["OBSERVATION"]}</td>
+                  <td className="border px-1 py-1"><ActionButtons sale={sale} {...{onEdit,onDetails,onCopy,onHide}}/></td>
+                </>
+              ) : (
+                <>
+                  <td className="border px-1 py-1 relative">
+                    {formatDate(sale["DATE DE VENTE"])}
+                    <div className="absolute bottom-0 left-0 w-full h-1 bg-gray-300">
+                      <div className="bg-green-500 h-1" style={{width:`${progress}%`}}/>
+                    </div>
+                  </td>
+                  <td className="border px-1 py-1">{sale["NOM DU CLIENT"]}</td>
+                  <td className="border px-1 py-1">{sale["VENDEUR"]}</td>
+                  <td className="border px-1 py-1">{sale["NUMERO BC"]}</td>
+                  <td className="border px-1 py-1">{sale["DESIGNATION"]}</td>
+                  <td className="border px-1 py-1 text-right">{formatNumber(ttc)}</td>
+                  <td className="border px-1 py-1">{sale["TAUX TVA"]}</td>
+                  <td className="border px-1 py-1 text-right">{formatNumber(ht)}</td>
+                  <td className={`border px-1 py-1 ${getBaremeBgColor(sale["BAREME COM"])}`}>{sale["BAREME COM"]}</td>
+                  <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT COMMISSIONS"])}</td>
+                  <td className="border px-1 py-1"><ActionButtons sale={sale} {...{onEdit,onDetails,onCopy,onHide}}/></td>
+                </>
+              )}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+);
 
-  // Gestion des ventes cachées via localStorage
-  const [hiddenSales, setHiddenSales] = useState(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("hiddenSales");
-      return stored ? JSON.parse(stored) : [];
-    }
-    return [];
-  });
+// ------------------------------------------------------------------
+// Totaux (TTC & HT uniquement)
+// ------------------------------------------------------------------
+const TotalsRow = ({ showAllSales,totalTTC,totalHT }) => (
+  <tr className="bg-gray-200 font-bold">
+    {showAllSales ? (
+      <>
+        <td colSpan={12} className="border px-1 py-1 text-right">Totaux :</td>
+        <td className="border px-1 py-1 text-right">{formatNumber(totalTTC)}</td>
+        <td className="border px-1 py-1 text-right">{formatNumber(totalHT)}</td>
+        <td colSpan={3} className="border px-1 py-1"/>
+      </>
+    ) : (
+      <>
+        <td colSpan={5} className="border px-1 py-1 text-right">Totaux :</td>
+        <td className="border px-1 py-1 text-right">{formatNumber(totalTTC)}</td>
+        <td className="border px-1 py-1"/>
+        <td className="border px-1 py-1 text-right">{formatNumber(totalHT)}</td>
+        <td colSpan={3} className="border px-1 py-1"/>
+      </>
+    )}
+  </tr>
+);
 
-  const router = useRouter();
-  const { width, height } = useWindowSize();
-  const tableRef = useRef(null);
+// ------------------------------------------------------------------
+// Boutons d'actions
+// ------------------------------------------------------------------
+const ActionButtons = ({ sale,onEdit,onDetails,onCopy,onHide }) => (
+  <div className="flex justify-center gap-1">
+    <button onClick={()=>onEdit(sale)} className="px-1 py-1 bg-blue-500 text-white rounded" aria-label="Modifier">
+      <FontAwesomeIcon icon={faEdit}/>
+    </button>
+    <button onClick={()=>onDetails(sale)} className="px-1 py-1 bg-green-500 text-white rounded" aria-label="Détails">
+      <FontAwesomeIcon icon={faFile}/>
+    </button>
+    <button onClick={()=>onCopy(sale)} className="px-1 py-1 bg-purple-500 text-white rounded" aria-label="Copier">
+      <FontAwesomeIcon icon={faCopy}/>
+    </button>
+    <button onClick={()=>onHide(sale)} className="px-1 py-1 bg-red-500 text-white rounded" aria-label="Cacher">
+      <FontAwesomeIcon icon={faTrash}/>
+    </button>
+  </div>
+);
 
-  useEffect(() => {
-    fetchSales();
-  }, [selectedMonth, selectedYear]);
+// ------------------------------------------------------------------
+// Modal Paiements (inchangé)
+// ------------------------------------------------------------------
+const PaymentModal = ({ sale,payments,setPayments,onClose,onSave }) => {
+  const { width,height } = useWindowSize();
+  const [newPayment,setNewPayment] = useState({ amount:"",date:"",comment:"" });
+  const [ocrLoading,setOcrLoading] = useState(false);
 
-  const fetchSales = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch("/api/ventes");
-      if (!response.ok) {
-        throw new Error(`Échec de la récupération des ventes : ${response.statusText}`);
-      }
-      const data = await response.json();
-      // Traitement des données (fix TVA, déduplication, etc.)
-      const processedSales = processSalesData(data.data);
-      setSales(processedSales);
-      filterSales(processedSales);
-    } catch (err) {
-      console.error("Erreur lors de la récupération des ventes :", err);
-      setError(`Erreur : ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const totalPaid = useMemo(()=>payments.reduce((s,p)=>s+p.montant,0),[payments]);
+  const totalAmount = parseFloat(sale["MONTANT TTC"])||parseFloat(sale["MONTANT HT"])||0;
+  const progress = totalAmount>0?totalPaid/totalAmount*100:0;
 
-  const filterSales = (salesData) => {
-    let filtered = salesData.filter((sale) => {
-      const saleDate = new Date(sale["DATE DE VENTE"]);
-      const dateCondition = showAllSales
-        ? true
-        : saleDate.getMonth() === selectedMonth &&
-          saleDate.getFullYear() === selectedYear;
+  const extractAmount = (txt)=>txt.match(/(\\d+[\\.,]\\d{2})/)?.[1].replace(",",".");
 
-      if (!dateCondition) return false;
-      if (hiddenSales.includes(sale._id)) return false;
-
-      if (searchTerm) {
-        const normalized = normalizeString(searchTerm);
-        const matches =
-          normalizeString(sale["NOM DU CLIENT"] || "").includes(normalized) ||
-          normalizeString(sale["TELEPHONE"] || "").includes(normalized) ||
-          normalizeString(sale["ADRESSE DU CLIENT"] || "").includes(normalized) ||
-          normalizeString(sale["VENDEUR"] || "").includes(normalized) ||
-          normalizeString(sale["DESIGNATION"] || "").includes(normalized);
-        if (!matches) return false;
-      }
-      return true;
-    });
-
-    filtered.sort((a, b) => {
-      let valueA = a[sortField];
-      let valueB = b[sortField];
-
-      if (sortField === "DATE DE VENTE" || sortField === "PREVISION CHANTIER") {
-        valueA = valueA ? new Date(valueA) : new Date(0);
-        valueB = valueB ? new Date(valueB) : new Date(0);
-      } else if (sortField === "MONTANT HT" || sortField === "MONTANT TTC") {
-        valueA = parseFloat(valueA);
-        valueB = parseFloat(valueB);
-      } else {
-        valueA = normalizeString(valueA);
-        valueB = normalizeString(valueB);
-      }
-
-      if (valueA < valueB) return sortOrder === "asc" ? -1 : 1;
-      if (valueA > valueB) return sortOrder === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    setTotalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginatedSales = filtered.slice(startIndex, endIndex);
-    setDisplayedSales(paginatedSales);
-  };
-
-  useEffect(() => {
-    filterSales(sales);
-  }, [
-    showAllSales,
-    selectedMonth,
-    selectedYear,
-    sortField,
-    sortOrder,
-    sales,
-    currentPage,
-    searchTerm,
-    hiddenSales,
-  ]);
-
-  const handleSearchChange = (e) => {
-    const term = normalizeString(e.target.value);
-    setSearchTerm(term);
-    setCurrentPage(1);
-  };
-
-  const handleRowDoubleClick = (sale) => {
-    setSelectedSale(sale);
-    setPayments(sale.payments || []);
-    setIsModalOpen(true);
-  };
-
-  const handleAddPayment = () => {
-    if (!newPaymentAmount || !newPaymentDate) {
-      alert("Veuillez remplir tous les champs de paiement.");
-      return;
-    }
-
-    const montant = parseFloat(newPaymentAmount);
-    if (isNaN(montant) || montant <= 0) {
-      alert("Veuillez entrer un montant valide.");
-      return;
-    }
-
-    const newPayment = {
-      montant,
-      date: newPaymentDate,
-      comment: newPaymentComment,
-      id: Date.now(),
-    };
-
-    setPayments((prev) => [...prev, newPayment]);
-
-    // Mise à jour de la vente dans le tableau global
-    setSales((prevSales) =>
-      prevSales.map((s) =>
-        s._id === selectedSale._id
-          ? { ...s, payments: [...(s.payments || []), newPayment] }
-          : s
-      )
-    );
-
-    setNewPaymentAmount("");
-    setNewPaymentDate("");
-    setNewPaymentComment("");
-  };
-
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
+  const handleImageUpload = async (e)=>{
+    const file = e.target.files[0]; if(!file) return;
     setOcrLoading(true);
-    try {
-      const { data } = await Tesseract.recognize(file, "fra");
-      const amount = extractAmountFromText(data.text);
-      if (amount) {
-        setNewPaymentAmount(amount);
-      } else {
-        alert("Aucun montant détecté dans l'image.");
-      }
-    } catch (error) {
-      console.error("Erreur OCR:", error);
-      alert("Erreur lors de la reconnaissance OCR.");
-    } finally {
-      setOcrLoading(false);
-    }
+    try{
+      const { data } = await Tesseract.recognize(file,"fra");
+      const amt = extractAmount(data.text);
+      if(amt) setNewPayment(p=>({...p,amount:amt})); else toast.warn("Aucun montant détecté");
+    }catch{ toast.error("Erreur OCR"); } finally{ setOcrLoading(false); }
   };
 
-  const extractAmountFromText = (text) => {
-    const regex = /(\d+[\.,\s]\d{2})/g;
-    const matches = text.match(regex);
-    if (matches && matches.length > 0) {
-      return matches[0].replace(",", ".").replace(" ", "");
-    }
-    return null;
+  const addPayment = ()=>{
+    const amt = parseFloat(newPayment.amount);
+    if(isNaN(amt)||!newPayment.date) return toast.error("Champs invalides");
+    setPayments(p=>[...p,{ id:Date.now(),montant:amt,date:newPayment.date,comment:newPayment.comment }]);
+    setNewPayment({ amount:"",date:"",comment:"" });
   };
-
-  const calculateTotalPaid = () =>
-    payments.reduce((sum, payment) => sum + payment.montant, 0);
-
-  const calculateProgress = () => {
-    const totalPaid = calculateTotalPaid();
-    const totalAmount =
-      parseFloat(selectedSale?.["MONTANT TTC"]) ||
-      parseFloat(selectedSale?.["MONTANT HT"]) ||
-      0;
-    return totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
-  };
-
-  const handleCopySale = (sale) => {
-    const saleData = `
-Date de Vente: ${formatDate(sale["DATE DE VENTE"])}
-Nom du Client: ${sale["NOM DU CLIENT"] || ""}
-Prénom: ${sale["prenom"] || ""}
-Numéro: ${sale["NUMERO BC"] || ""}
-Adresse du Client: ${sale["ADRESSE DU CLIENT"] || ""}
-CODE INTERP etage: ${sale["CODE INTERP etage"] || ""}
-Ville: ${sale["VILLE"] || ""}
-CP: ${sale["CP"] || ""}
-Téléphone: ${sale["TELEPHONE"] || ""}
-Vendeur: ${sale["VENDEUR"] || ""}
-Désignation: ${sale["DESIGNATION"] || ""}
-Taux TVA: ${sale["TAUX TVA"] || ""}
-Montant TTC: ${formatNumber(sale["MONTANT TTC"])}
-Montant HT: ${formatNumber(sale["MONTANT HT"])}
-Prévision Chantier: ${sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION CHANTIER"]) : ""}
-Observation: ${sale["OBSERVATION"] || ""}
-    `;
-    navigator.clipboard
-      .writeText(saleData)
-      .then(() => alert("Vente copiée dans le presse-papiers !"))
-      .catch((err) => {
-        console.error("Erreur lors de la copie :", err);
-        alert("Erreur lors de la copie.");
-      });
-  };
-
-  const handleHideSale = (sale) => {
-    const confirmation = confirm("Êtes-vous sûr de vouloir cacher cette vente ?");
-    if (!confirmation) return;
-    const updatedHiddenSales = [...hiddenSales, sale._id];
-    setHiddenSales(updatedHiddenSales);
-    localStorage.setItem("hiddenSales", JSON.stringify(updatedHiddenSales));
-
-    setSales((prevSales) => prevSales.filter((s) => s._id !== sale._id));
-    setDisplayedSales((prevDisplayedSales) =>
-      prevDisplayedSales.filter((s) => s._id !== sale._id)
-    );
-    alert("Vente cachée avec succès.");
-  };
-
-  const handleSaveSale = async () => {
-    try {
-      const updatedSale = selectedSale;
-      const res = await fetch(`/api/ventes/${updatedSale._id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedSale),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || `Erreur : ${res.status}`);
-      }
-
-      const data = await res.json();
-      setSales((prevSales) =>
-        prevSales.map((sale) => (sale._id === data.data._id ? data.data : sale))
-      );
-      alert("Vente mise à jour avec succès !");
-      setIsModalOpen(false);
-    } catch (error) {
-      console.error("Erreur lors de la sauvegarde :", error.message);
-      alert(`Erreur lors de la sauvegarde : ${error.message}`);
-    }
-  };
-
-  const calculateTotalHT = () => {
-    return displayedSales.reduce((sum, sale) => {
-      const etatNormalized = normalizeString(sale.ETAT || "");
-      if (etatNormalized === "annule") return sum;
-      const montantHT = parseFloat(sale["MONTANT HT"]);
-      return sum + (isNaN(montantHT) ? 0 : montantHT);
-    }, 0);
-  };
-
-  const calculateTotalTTC = () => {
-    return displayedSales.reduce((sum, sale) => {
-      const etatNormalized = normalizeString(sale.ETAT || "");
-      if (etatNormalized === "annule") return sum;
-      const montantTTC = parseFloat(sale["MONTANT TTC"]);
-      return sum + (isNaN(montantTTC) ? 0 : montantTTC);
-    }, 0);
-  };
-
-  const calculateTotalMontant = () => {
-    return displayedSales.reduce((sum, sale) => {
-      return sum + calculateMontant(sale);
-    }, 0);
-  };
-
-  const handleCopyCSV = () => {
-    if (displayedSales.length === 0) {
-      alert("Aucune vente à copier.");
-      return;
-    }
-    const fields = [
-      "DATE DE VENTE",
-      "NOM DU CLIENT",
-      "prenom",
-      "NUMERO BC",
-      "ADRESSE DU CLIENT",
-      "CODE INTERP etage",
-      "VILLE",
-      "CP",
-      "TELEPHONE",
-      "VENDEUR",
-      "DESIGNATION",
-      "TAUX TVA",
-      "MONTANT TTC",
-      "MONTANT HT",
-      "RESULTAT",
-      "ETAT",
-      "PREVISION CHANTIER",
-      "OBSERVATION",
-    ];
-    const lines = [];
-    lines.push(fields.join(";"));
-
-    for (const sale of displayedSales) {
-      const values = fields.map((f) => sale[f] || "");
-      lines.push(values.join(";"));
-    }
-
-    const csv = lines.join("\n");
-    navigator.clipboard
-      .writeText(csv)
-      .then(() => alert("CSV des ventes copiées !"))
-      .catch(() => alert("Erreur lors de la copie du CSV."));
-  };
-
-  const handleDownloadCSV = () => {
-    if (displayedSales.length === 0) {
-      alert("Aucune vente à télécharger.");
-      return;
-    }
-    const fields = [
-      "DATE DE VENTE",
-      "NOM DU CLIENT",
-      "prenom",
-      "NUMERO BC",
-      "ADRESSE DU CLIENT",
-      "CODE INTERP etage",
-      "VILLE",
-      "CP",
-      "TELEPHONE",
-      "VENDEUR",
-      "DESIGNATION",
-      "TAUX TVA",
-      "MONTANT TTC",
-      "MONTANT HT",
-      "RESULTAT",
-      "ETAT",
-      "PREVISION CHANTIER",
-      "OBSERVATION",
-    ];
-    const lines = [];
-    lines.push(fields.join(";"));
-
-    for (const sale of displayedSales) {
-      const values = fields.map((f) => sale[f] || "");
-      lines.push(values.join(";"));
-    }
-
-    const csv = lines.join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "ventes.csv";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const months = [
-    "Janvier",
-    "Février",
-    "Mars",
-    "Avril",
-    "Mai",
-    "Juin",
-    "Juillet",
-    "Août",
-    "Septembre",
-    "Octobre",
-    "Novembre",
-    "Décembre",
-  ];
-
-  if (loading) {
-    return <p className="text-center text-gray-700">Chargement...</p>;
-  }
-  if (error) {
-    return <p className="text-center text-red-500">{error}</p>;
-  }
 
   return (
-    <div className="min-h-screen flex flex-col items-center bg-gray-800 p-2 font-arial text-[10px]">
-      {/* Contrôles en haut */}
-      <div className="flex flex-col items-center w-full mb-2">
-        <button
-          onClick={() => router.back()}
-          className="px-2 py-1 bg-gray-700 text-white rounded mb-1 text-[10px]"
-        >
-          Retour
-        </button>
-        <button
-          onClick={() => setShowAllSales(!showAllSales)}
-          className="px-2 py-1 bg-blue-500 text-white rounded mb-1 text-[10px]"
-        >
-          {showAllSales ? "Afficher mensuelles" : "Afficher toutes"}
-        </button>
-        <div className="flex flex-col md:flex-row items-center justify-center w-full mb-1 space-y-1 md:space-y-0">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={handleSearchChange}
-            placeholder="Rechercher"
-            className="w-full md:w-1/2 p-1 border border-gray-300 rounded text-[10px]"
-          />
+    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 text-[10px]">
+      <div className="bg-white w-11/12 md:w-2/3 lg:w-1/2 p-2 rounded-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-xs font-bold">Paiements – {sale["NOM DU CLIENT"]}</h2>
+          <button onClick={onClose} aria-label="Fermer"><FontAwesomeIcon icon={faTimes}/></button>
         </div>
-        <div className="flex flex-wrap items-center justify-center w-full mb-1 space-x-1">
-          <label className="text-white text-[10px]">Trier par:</label>
-          <select
-            value={sortField}
-            onChange={(e) => setSortField(e.target.value)}
-            className="p-1 border border-gray-300 rounded text-[10px]"
-          >
-            <option value="DATE DE VENTE">DATE DE VENTE</option>
-            <option value="NOM DU CLIENT">NOM DU CLIENT</option>
-            <option value="MONTANT HT">MONTANT HT</option>
-            <option value="MONTANT TTC">MONTANT TTC</option>
-            <option value="VENDEUR">VENDEUR</option>
-            <option value="DESIGNATION">DESIGNATION</option>
-            <option value="PREVISION CHANTIER">PREVISION CHANTIER</option>
-          </select>
-          <select
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value)}
-            className="p-1 border border-gray-300 rounded text-[10px]"
-          >
-            <option value="asc">Asc</option>
-            <option value="desc">Desc</option>
-          </select>
-          <button
-            onClick={handleCopyCSV}
-            className="px-2 py-1 bg-purple-500 text-white rounded text-[10px]"
-            title="Copier CSV"
-          >
-            <FontAwesomeIcon icon={faCopy} />
-          </button>
-          <button
-            onClick={handleDownloadCSV}
-            className="px-2 py-1 bg-green-500 text-white rounded text-[10px]"
-            title="Télécharger CSV"
-          >
-            <FontAwesomeIcon icon={faDownload} />
-          </button>
-        </div>
-      </div>
 
-      {/* Affichage du tableau */}
-      <div className="w-full overflow-x-auto mb-8">
-        <table ref={tableRef} className="min-w-full bg-white text-gray-800 text-[10px]">
-          {showAllSales ? (
-            <thead className="bg-gray-700 text-white">
-              <tr>
-                <th className="border px-1 py-1">DATE DE VENTE</th>
-                <th className="border px-1 py-1">NOM DU CLIENT</th>
-                <th className="border px-1 py-1">prenom</th>
-                <th className="border px-1 py-1">NUMERO BC</th>
-                <th className="border px-1 py-1">ADRESSE DU CLIENT</th>
-                <th className="border px-1 py-1">CODE INTERP etage</th>
-                <th className="border px-1 py-1">VILLE</th>
-                <th className="border px-1 py-1">CP</th>
-                <th className="border px-1 py-1">TELEPHONE</th>
-                <th className="border px-1 py-1">VENDEUR</th>
-                <th className="border px-1 py-1">DESIGNATION</th>
-                <th className="border px-1 py-1">TAUX TVA</th>
-                <th className="border px-1 py-1">MONTANT TTC</th>
-                <th className="border px-1 py-1">MONTANT HT</th>
-                <th className="border px-1 py-1">MONTANT</th>
-                <th className="border px-1 py-1">PREVISION CHANTIER</th>
-                <th className="border px-1 py-1">OBSERVATION</th>
-                <th className="border px-1 py-1">Actions</th>
-              </tr>
-            </thead>
-          ) : (
-            <thead className="bg-gray-700 text-white">
-              <tr>
-                <th>Date vente</th>
-                <th>Client</th>
-                <th>VENDEUR</th>
-                <th>BC</th>
-                <th>désignation produit</th>
-                <th>Montant vente TTC (€)</th>
-                <th>TVA</th>
-                <th>CA HT (€)</th>
-                <th>MONTANT</th>
-                <th>Barème COM</th>
-                <th>Montant commissions en €</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-          )}
-          <tbody className="bg-white">
-            {displayedSales.map((sale) => {
-              const etatNormalized = normalizeString(sale.ETAT || "");
-              let rowClass = "";
-              if (etatNormalized === "annule") {
-                rowClass = "bg-red-200 animate-blink";
-              } else if (!sale["ADRESSE DU CLIENT"] || !sale.VILLE) {
-                rowClass = "animate-blink-yellow";
-              }
-              const totalPaid = (sale.payments || []).reduce(
-                (sum, p) => sum + parseFloat(p.montant),
-                0
-              );
-              const totalAmount =
-                parseFloat(sale["MONTANT TTC"]) ||
-                parseFloat(sale["MONTANT HT"]) ||
-                0;
-              const rowProgress = totalAmount > 0 ? (totalPaid / totalAmount) * 100 : 0;
-
-              return (
-                <tr
-                  key={sale._id}
-                  className={`${rowClass} hover:bg-gray-100`}
-                  onDoubleClick={() => handleRowDoubleClick(sale)}
-                >
-                  {showAllSales ? (
-                    <>
-                      <td className="border px-1 py-1">{formatDate(sale["DATE DE VENTE"])}</td>
-                      <td className="border px-1 py-1">{sale["NOM DU CLIENT"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["prenom"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["NUMERO BC"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["ADRESSE DU CLIENT"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["CODE INTERP etage"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["VILLE"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["CP"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["TELEPHONE"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["VENDEUR"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["DESIGNATION"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["TAUX TVA"] || ""}</td>
-                      <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT TTC"])}</td>
-                      <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT HT"])}</td>
-                      <td className="border px-1 py-1 text-right">{formatNumber(calculateMontant(sale))}</td>
-                      <td className="border px-1 py-1">
-                        {sale["PREVISION CHANTIER"] ? formatDate(sale["PREVISION CHANTIER"]) : ""}
-                      </td>
-                      <td className="border px-1 py-1">{sale["OBSERVATION"] || ""}</td>
-                      <td className="border px-1 py-1 flex justify-center space-x-1">
-                        <button
-                          onClick={() => router.push(`/sales/edit/${sale._id}`)}
-                          className="px-1 py-1 bg-blue-500 text-white rounded text-[10px]"
-                          title="Modifier"
-                        >
-                          <FontAwesomeIcon icon={faEdit} />
-                        </button>
-                        <button
-                          onClick={() => router.push(`/file/details/${sale._id}`)}
-                          className="px-1 py-1 bg-green-500 text-white rounded text-[10px]"
-                          title="Détails"
-                        >
-                          <FontAwesomeIcon icon={faFile} />
-                        </button>
-                        <button
-                          onClick={() => handleRowDoubleClick(sale)}
-                          className="px-1 py-1 bg-yellow-500 text-white rounded text-[10px]"
-                          title="Paiements"
-                        >
-                          <FontAwesomeIcon icon={faMoneyBillWave} />
-                        </button>
-                        <button
-                          onClick={() => handleCopySale(sale)}
-                          className="px-1 py-1 bg-purple-500 text-white rounded text-[10px]"
-                          title="Copier"
-                        >
-                          <FontAwesomeIcon icon={faCopy} />
-                        </button>
-                        <button
-                          onClick={() => handleHideSale(sale)}
-                          className="px-1 py-1 bg-red-500 text-white rounded text-[10px]"
-                          title="Cacher"
-                        >
-                          <FontAwesomeIcon icon={faTrash} />
-                        </button>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="border px-1 py-1 relative">
-                        {formatDate(sale["DATE DE VENTE"])}
-                        <div className="absolute bottom-0 left-0 w-full">
-                          <div className="w-full bg-gray-300 h-1">
-                            <div
-                              className="bg-green-500 h-1"
-                              style={{ width: `${rowProgress}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="border px-1 py-1">{sale["NOM DU CLIENT"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["VENDEUR"] || "Inconnu"}</td>
-                      <td className="border px-1 py-1">{sale["NUMERO BC"] || ""}</td>
-                      <td className="border px-1 py-1">{sale["DESIGNATION"] || "N/A"}</td>
-                      <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT TTC"])}</td>
-                      <td className="border px-1 py-1">{sale["TAUX TVA"] || "N/A"}</td>
-                      <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT HT"])}</td>
-                      <td className="border px-1 py-1 text-right">{formatNumber(calculateMontant(sale))}</td>
-                      <td className={`border px-1 py-1 ${getBaremeBgColor(sale["BAREME COM"])}`}>
-                        <select
-                          value={sale["BAREME COM"]}
-                          onChange={(e) => {
-                            const newBareme = e.target.value;
-                            const updatedSale = { ...sale, "BAREME COM": newBareme };
-                            updatedSale["MONTANT COMMISSIONS"] = calculateCommission(updatedSale);
-                            setSales((prev) =>
-                              prev.map((s) => (s._id === sale._id ? updatedSale : s))
-                            );
-                          }}
-                          className="p-1 border border-gray-300 rounded text-[10px]"
-                        >
-                          <option value="T1">T1 (20%)</option>
-                          <option value="T2">T2 (17%)</option>
-                          <option value="T3">T3 (15%)</option>
-                          <option value="T4">T4 (12%)</option>
-                          <option value="T5">T5 (10%)</option>
-                          <option value="T6">T6 (6%)</option>
-                        </select>
-                      </td>
-                      <td className="border px-1 py-1 text-right">
-                        {sale["MONTANT COMMISSIONS"]
-                          ? formatNumber(sale["MONTANT COMMISSIONS"])
-                          : "-"}
-                      </td>
-                      <td className="border px-1 py-1 flex justify-center space-x-1">
-                        <button
-                          onClick={() => router.push(`/sales/edit/${sale._id}`)}
-                          className="px-1 py-1 bg-blue-500 text-white rounded text-[10px]"
-                          title="Modifier"
-                        >
-                          <FontAwesomeIcon icon={faEdit} />
-                        </button>
-                        <button
-                          onClick={() => router.push(`/file/details/${sale._id}`)}
-                          className="px-1 py-1 bg-green-500 text-white rounded text-[10px]"
-                          title="Détails"
-                        >
-                          <FontAwesomeIcon icon={faFile} />
-                        </button>
-                        <button
-                          onClick={() => handleRowDoubleClick(sale)}
-                          className="px-1 py-1 bg-yellow-500 text-white rounded text-[10px]"
-                          title="Paiements"
-                        >
-                          <FontAwesomeIcon icon={faMoneyBillWave} />
-                        </button>
-                        <button
-                          onClick={() => handleCopySale(sale)}
-                          className="px-1 py-1 bg-purple-500 text-white rounded text-[10px]"
-                          title="Copier"
-                        >
-                          <FontAwesomeIcon icon={faCopy} />
-                        </button>
-                        <button
-                          onClick={() => handleHideSale(sale)}
-                          className="px-1 py-1 bg-red-500 text-white rounded text-[10px]"
-                          title="Cacher"
-                        >
-                          <FontAwesomeIcon icon={faTrash} />
-                        </button>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              );
-            })}
-            {showAllSales ? (
-              <tr
-                className="bg-gray-200 font-bold cursor-pointer"
-                onMouseEnter={() => setShowConfetti(true)}
-                onMouseLeave={() => setShowConfetti(false)}
-              >
-                <td colSpan="12" className="border px-1 py-1 text-right">Totaux :</td>
-                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalTTC())}</td>
-                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalHT())}</td>
-                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalMontant())}</td>
-                <td colSpan="3" className="border px-1 py-1"></td>
-              </tr>
-            ) : (
-              <tr
-                className="bg-gray-200 font-bold cursor-pointer"
-                onMouseEnter={() => setShowConfetti(true)}
-                onMouseLeave={() => setShowConfetti(false)}
-              >
-                <td colSpan="5" className="border px-1 py-1 text-right">Totaux :</td>
-                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalTTC())}</td>
-                <td className="border px-1 py-1"></td>
-                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalHT())}</td>
-                <td className="border px-1 py-1 text-right">{formatNumber(calculateTotalMontant())}</td>
-                <td colSpan="3" className="border px-1 py-1"></td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {showConfetti && <Confetti width={width} height={height} />}
-
-      {isModalOpen && selectedSale && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white w-11/12 md:w-2/3 lg:w-1/2 p-2 rounded-lg overflow-y-auto max-h-screen text-[10px]">
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-xs font-bold">
-                Paiements pour {selectedSale["NOM DU CLIENT"]}
-              </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-600 hover:text-gray-800 text-xs"
-              >
-                <FontAwesomeIcon icon={faTimes} size="lg" />
-              </button>
-            </div>
-            <div className="mb-2 border-b pb-1">
-              <h3 className="text-xs font-semibold mb-1">Aperçu de la Vente</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-[10px]">
-                <div>
-                  <p>
-                    <span className="font-bold">Date de Vente:</span>{" "}
-                    {formatDate(selectedSale["DATE DE VENTE"])}
-                  </p>
-                  <p>
-                    <span className="font-bold">Nom:</span>{" "}
-                    {selectedSale["NOM DU CLIENT"] || ""}
-                  </p>
-                  <p>
-                    <span className="font-bold">Téléphone:</span>{" "}
-                    {selectedSale.TELEPHONE || ""}
-                  </p>
-                  <p>
-                    <span className="font-bold">Adresse:</span>{" "}
-                    {selectedSale["ADRESSE DU CLIENT"] || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <p>
-                    <span className="font-bold">Ville:</span>{" "}
-                    {selectedSale.VILLE || "N/A"}
-                  </p>
-                  <p>
-                    <span className="font-bold">Vendeur:</span>{" "}
-                    {selectedSale["VENDEUR"] || ""}
-                  </p>
-                  <p>
-                    <span className="font-bold">Désignation:</span>{" "}
-                    {selectedSale["DESIGNATION"] || ""}
-                  </p>
-                  <p>
-                    <span className="font-bold">État:</span>{" "}
-                    {selectedSale.ETAT || ""}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-1 text-[10px]">
-                <p>
-                  <span className="font-bold">Montant TTC:</span>{" "}
-                  {formatNumber(selectedSale["MONTANT TTC"])}
-                </p>
-                <p>
-                  <span className="font-bold">Montant HT:</span>{" "}
-                  {formatNumber(selectedSale["MONTANT HT"])}
-                </p>
-              </div>
-            </div>
-            <div className="mb-2 text-[10px]">
-              <h3 className="font-bold mb-1 text-xs">Prévision Chantier:</h3>
-              <input
-                type="date"
-                value={selectedSale["PREVISION CHANTIER"] || ""}
-                onChange={(e) => {
-                  const updatedSale = { ...selectedSale, "PREVISION CHANTIER": e.target.value };
-                  setSelectedSale(updatedSale);
-                  setSales((prevSales) =>
-                    prevSales.map((s) => (s._id === updatedSale._id ? updatedSale : s))
-                  );
-                }}
-                className="w-full p-1 border border-gray-300 rounded text-[10px]"
-              />
-            </div>
-            <div className="mb-2 text-[10px]">
-              <button
-                onClick={handleSaveSale}
-                className="px-2 py-1 bg-blue-500 text-white rounded text-[10px]"
-              >
-                Sauvegarder
-              </button>
-            </div>
-            <div className="mb-2 text-[10px]">
-              <h3 className="font-bold mb-1 text-xs">Progression des Paiements :</h3>
-              <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
-                <div
-                  className="bg-green-500 h-2 rounded-full"
-                  style={{ width: `${calculateProgress()}%` }}
-                ></div>
-              </div>
-              <p>
-                <span className="font-bold">Total:</span>{" "}
-                {formatNumber(
-                  parseFloat(selectedSale["MONTANT TTC"]) ||
-                  parseFloat(selectedSale["MONTANT HT"]) ||
-                  0
-                )}
-              </p>
-              <p>
-                <span className="font-bold">Payé:</span>{" "}
-                {formatNumber(calculateTotalPaid())}
-              </p>
-              <p>
-                <span className="font-bold">Restant:</span>{" "}
-                {formatNumber(
-                  (parseFloat(selectedSale["MONTANT TTC"]) ||
-                  parseFloat(selectedSale["MONTANT HT"]) ||
-                  0) - calculateTotalPaid()
-                )}
-              </p>
-            </div>
-            <div className="mb-2 text-[10px]">
-              <h3 className="font-bold mb-1 text-xs">Historique des paiements:</h3>
-              {payments.length > 0 ? (
-                <ul className="list-disc list-inside text-[10px]">
-                  {payments.map((payment) => (
-                    <li key={payment.id} className="mb-1">
-                      <span className="font-medium">{formatDate(payment.date)}</span> - {formatNumber(payment.montant)}
-                      {payment.comment && (
-                        <p className="text-[9px] text-gray-600">
-                          Commentaire : {payment.comment}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>Aucun paiement.</p>
-              )}
-            </div>
-            <div className="mb-2 text-[10px]">
-              <h3 className="font-bold mb-1 text-xs">Ajouter un paiement:</h3>
-              <div className="flex flex-col space-y-1">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={newPaymentAmount}
-                  onChange={(e) => setNewPaymentAmount(e.target.value)}
-                  placeholder="Montant"
-                  className="p-1 border border-gray-300 rounded text-[10px]"
-                />
-                <input
-                  type="date"
-                  value={newPaymentDate}
-                  onChange={(e) => setNewPaymentDate(e.target.value)}
-                  className="p-1 border border-gray-300 rounded text-[10px]"
-                />
-                <textarea
-                  value={newPaymentComment}
-                  onChange={(e) => setNewPaymentComment(e.target.value)}
-                  placeholder="Commentaire"
-                  className="p-1 border border-gray-300 rounded text-[10px]"
-                ></textarea>
-                <div className="flex items-center">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="p-1 text-[10px]"
-                  />
-                  {ocrLoading && (
-                    <span className="ml-1 text-gray-600 text-[9px]">Analyse...</span>
-                  )}
-                </div>
-                <button
-                  onClick={handleAddPayment}
-                  className="px-2 py-1 bg-green-500 text-white rounded text-[10px]"
-                >
-                  Ajouter
-                </button>
-              </div>
-            </div>
+        <div className="mb-1 text-xs">
+          <p>Total : {formatNumber(totalAmount)}</p>
+          <p>Payé : {formatNumber(totalPaid)}</p>
+          <div className="w-full h-2 bg-gray-200 rounded">
+            <div className="h-2 bg-green-500 rounded" style={{width:`${progress}%`}}/>
           </div>
+        </div>
+
+        <div className="mb-2">
+          <h3 className="font-semibold">Historique :</h3>
+          {payments.length
+            ? <ul className="list-disc ml-4">{payments.map(p=><li key={p.id}>{formatDate(p.date)} – {formatNumber(p.montant)} {p.comment&&`(${p.comment})`}</li>)}</ul>
+            : <p>Aucun paiement.</p>}
+        </div>
+
+        <div className="space-y-1">
+          <input type="number" step="0.01" value={newPayment.amount} onChange={e=>setNewPayment(p=>({...p,amount:e.target.value}))}
+                 placeholder="Montant" className="p-1 border rounded w-full"/>
+          <input type="date" value={newPayment.date} onChange={e=>setNewPayment(p=>({...p,date:e.target.value}))}
+                 className="p-1 border rounded w-full"/>
+          <textarea value={newPayment.comment} onChange={e=>setNewPayment(p=>({...p,comment:e.target.value}))}
+                    placeholder="Commentaire" className="p-1 border rounded w-full"/>
+          <input type="file" accept="image/*" onChange={handleImageUpload}/>
+          {ocrLoading&&<span>Analyse OCR…</span>}
+          <button onClick={addPayment} className="px-2 py-1 bg-green-600 text-white rounded">Ajouter</button>
+        </div>
+
+        <button onClick={onSave} className="mt-2 px-2 py-1 bg-blue-600 text-white rounded">Sauvegarder</button>
+      </div>
+      <Confetti width={width} height={height} recycle={false} numberOfPieces={150}/>
+    </div>
+  );
+};
+
+// ------------------------------------------------------------------
+// Composant principal
+// ------------------------------------------------------------------
+const AllSales = () => {
+  const router = useRouter();
+  const [sales,setSales] = useState([]);
+  const [showAllSales,setShowAllSales] = useState(true);
+  const [selectedMonth,setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear,setSelectedYear] = useState(new Date().getFullYear());
+  const [searchTerm,setSearchTerm] = useState("");
+  const [sortField,setSortField] = useState("DATE DE VENTE");
+  const [sortOrder,setSortOrder] = useState("asc");
+  const [currentPage,setCurrentPage] = useState(1);
+  const [loading,setLoading] = useState(true);
+  const [error,setError] = useState(null);
+  const [modalSale,setModalSale] = useState(null);
+  const [hiddenSales,setHiddenSales] = useState(()=>typeof window==="undefined"?[]:JSON.parse(localStorage.getItem("hiddenSales")||"[]"));
+
+  const fetchSales = useCallback(async ()=>{
+    setLoading(true);
+    try{
+      const res = await fetch("/api/ventes");
+      if(!res.ok) throw new Error(res.statusText);
+      const data = await res.json();
+      setSales(processSalesData(data.data));
+    }catch(err){ setError(err.message); } finally{ setLoading(false);}
+  },[]);
+
+  useEffect(()=>{ fetchSales(); },[fetchSales]);
+
+  // Filtres
+  const filteredSales = useMemo(()=>sales.filter(s=>{
+    if(hiddenSales.includes(s._id)) return false;
+    const d = new Date(s["DATE DE VENTE"]);
+    if(!showAllSales && (d.getMonth()!==selectedMonth||d.getFullYear()!==selectedYear)) return false;
+    if(searchTerm){
+      const n = normalizeString(searchTerm);
+      const fields=[s["NOM DU CLIENT"],s["TELEPHONE"],s["ADRESSE DU CLIENT"],s["VENDEUR"],s["DESIGNATION"]];
+      if(!fields.some(f=>normalizeString(f||"").includes(n))) return false;
+    }
+    return true;
+  }),[sales,hiddenSales,showAllSales,selectedMonth,selectedYear,searchTerm]);
+
+  const sortedSales = useMemo(()=>[...filteredSales].sort((a,b)=>{
+    let A=a[sortField], B=b[sortField];
+    if(sortField.includes("DATE")){ A=new Date(A||0); B=new Date(B||0); }
+    else if(sortField.includes("MONTANT")){ A=parseFloat(A)||0; B=parseFloat(B)||0; }
+    else{ A=normalizeString(A); B=normalizeString(B);}
+    if(A<B) return sortOrder==="asc"?-1:1;
+    if(A>B) return sortOrder==="asc"?1:-1;
+    return 0;
+  }),[filteredSales,sortField,sortOrder]);
+
+  const paginatedSales = useMemo(()=>{
+    const start=(currentPage-1)*ITEMS_PER_PAGE;
+    return sortedSales.slice(start,start+ITEMS_PER_PAGE);
+  },[sortedSales,currentPage]);
+
+  const totalPages = Math.max(1,Math.ceil(sortedSales.length/ITEMS_PER_PAGE));
+
+  // Totaux (TTC & HT)
+  const [totalTTC,totalHT] = useMemo(()=>{
+    let ttc=0,ht=0;
+    paginatedSales.forEach(s=>{
+      if(normalizeString(s.ETAT)==="annule") return;
+      ttc+=parseFloat(s["MONTANT TTC"])||0;
+      ht +=parseFloat(s["MONTANT HT"]) ||0;
+    });
+    return [ttc,ht];
+  },[paginatedSales]);
+
+  // Handlers
+  const handleHideSale = (sale)=>{
+    if(confirm("Cacher cette vente ?")){
+      const updated=[...hiddenSales,sale._id];
+      setHiddenSales(updated);
+      localStorage.setItem("hiddenSales",JSON.stringify(updated));
+      toast.success("Vente cachée");
+    }
+  };
+
+  const handleCopySale = (sale)=>{
+    const txt = `Date : ${formatDate(sale["DATE DE VENTE"])}\nClient : ${sale["NOM DU CLIENT"]}\nMontant TTC : ${formatNumber(sale["MONTANT TTC"])}`;
+    navigator.clipboard.writeText(txt).then(()=>toast.success("Copié !"));
+  };
+
+  const handleCopyCSV = ()=>{
+    if(!paginatedSales.length) return toast.info("Rien à copier");
+    const fields=["DATE DE VENTE","NOM DU CLIENT","MONTANT TTC","MONTANT HT"];
+    const csv=[fields.join(";"),...paginatedSales.map(s=>fields.map(f=>s[f]||"").join(";"))].join("\n");
+    navigator.clipboard.writeText(csv).then(()=>toast.success("CSV copié"));
+  };
+
+  const handleDownloadCSV = ()=>{
+    if(!paginatedSales.length) return toast.info("Rien à télécharger");
+    const blob=new Blob([paginatedSales.map(s=>Object.values(s).join(";")).join("\n")],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download="ventes.csv"; a.click(); URL.revokeObjectURL(url);
+  };
+
+  const handleSaveModalSale = async ()=>{
+    if(!modalSale) return;
+    try{
+      const res = await fetch(`/api/ventes/${modalSale._id}`,{
+        method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(modalSale)
+      });
+      if(!res.ok) throw new Error(await res.text());
+      toast.success("Sauvegardé !");
+      setModalSale(null); fetchSales();
+    }catch(err){ toast.error(err.message);}
+  };
+
+  // ----------------------------------------------------------------
+  // Render
+  // ----------------------------------------------------------------
+  if(loading) return <Loader/>;
+  if(error)  return <p className="text-red-600">Erreur : {error}</p>;
+
+  return (
+    <div className="min-h-screen bg-gray-800 text-[10px] p-2 flex flex-col items-center">
+      <button onClick={()=>router.back()} className="mb-1 px-2 py-1 bg-gray-700 text-white rounded">Retour</button>
+
+      <FiltersBar
+        showAllSales={showAllSales}
+        toggleShowAll={()=>setShowAllSales(v=>!v)}
+        searchTerm={searchTerm}
+        onSearchChange={e=>{setSearchTerm(e.target.value); setCurrentPage(1);}}
+        sortField={sortField} setSortField={setSortField}
+        sortOrder={sortOrder} setSortOrder={setSortOrder}
+        copyCSV={handleCopyCSV} downloadCSV={handleDownloadCSV}
+        selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth}
+        selectedYear={selectedYear} setSelectedYear={setSelectedYear}
+      />
+
+      <SalesTable
+        sales={paginatedSales} showAllSales={showAllSales}
+        onDoubleClick={setModalSale}
+        onEdit={s=>router.push(`/sales/edit/${s._id}`)}
+        onDetails={s=>router.push(`/file/details/${s._id}`)}
+        onCopy={handleCopySale} onHide={handleHideSale}
+      />
+
+      {/* Pagination */}
+      {totalPages>1 && (
+        <div className="flex gap-1 mb-2">
+          <button disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)}
+                  className="px-2 py-1 bg-gray-600 text-white rounded disabled:opacity-50">←</button>
+          <span className="self-center text-white">{currentPage} / {totalPages}</span>
+          <button disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)}
+                  className="px-2 py-1 bg-gray-600 text-white rounded disabled:opacity-50">→</button>
         </div>
       )}
 
-      {/* Footer pour la vue mensuelle */}
-      {!showAllSales && (
-        <footer className="fixed bottom-0 left-0 w-full bg-gray-700 text-white py-1 flex flex-col md:flex-row justify-between items-center px-1 text-[10px]">
-          <div className="flex space-x-1 overflow-x-auto mb-1 md:mb-0">
-            {months.map((month, index) => (
-              <button
-                key={index}
-                onClick={() => {
-                  setSelectedMonth(index);
-                  setCurrentPage(1);
-                }}
-                className={`px-1 py-1 rounded whitespace-nowrap text-[10px] ${
-                  selectedMonth === index ? "bg-blue-500" : "bg-gray-600"
-                }`}
-              >
-                {month}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center space-x-1">
-            <label htmlFor="year" className="mr-1 text-[10px]">
-              Année :
-            </label>
-            <select
-              id="year"
-              value={selectedYear}
-              onChange={(e) => {
-                setSelectedYear(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="p-1 bg-gray-600 rounded text-white text-[10px]"
-            >
-              {Array.from({ length: 10 }, (_, i) => {
-                const year = new Date().getFullYear() - i;
-                return (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-        </footer>
+      {/* Totaux (table cachée pour alignement) */}
+      <table className="hidden" aria-hidden="true"><tbody>
+        <TotalsRow showAllSales={showAllSales} totalTTC={totalTTC} totalHT={totalHT}/>
+      </tbody></table>
+
+      {modalSale && (
+        <PaymentModal
+          sale={modalSale}
+          payments={modalSale.payments||[]}
+          setPayments={p=>setModalSale(s=>({...s,payments:p}))}
+          onClose={()=>setModalSale(null)}
+          onSave={handleSaveModalSale}
+        />
       )}
 
-      {/* Styles supplémentaires */}
-      <style jsx>{`
-        @keyframes blink {
-          0% { opacity: 1; }
-          50% { opacity: 0.5; }
-          100% { opacity: 1; }
-        }
-        .animate-blink {
-          animation: blink 1s infinite;
-        }
-        .animate-blink-yellow {
-          animation: blink-yellow 1s infinite;
-          background-color: #fff3cd;
-        }
-        @keyframes blink-yellow {
-          0% { background-color: #fff3cd; }
-          50% { background-color: #ffecb5; }
-          100% { background-color: #fff3cd; }
-        }
-        th, td {
-          font-family: Arial, sans-serif;
-          padding: 2px;
-          border: 1px solid #d1d5db;
-          white-space: nowrap;
-          text-align: center;
-        }
-        th {
-          font-weight: bold;
-        }
-      `}</style>
+      <ToastContainer position="bottom-center" autoClose={2500} hideProgressBar newestOnTop/>
     </div>
   );
 };

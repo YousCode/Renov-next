@@ -1,0 +1,962 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "@babel/runtime": {
+      "name": "@babel/runtime",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1104000,
+          "name": "@babel/runtime",
+          "dependency": "@babel/runtime",
+          "title": "Babel has inefficient RegExp complexity in generated code with .replace when transpiling named capturing groups",
+          "url": "https://github.com/advisories/GHSA-968p-4wvh-cqc8",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 6.2,
+            "vectorString": "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<7.26.10"
+        }
+      ],
+      "effects": [],
+      "range": "<7.26.10",
+      "nodes": [
+        "node_modules/@babel/runtime"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/attachment": {
+      "name": "@react-pdf-viewer/attachment",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/attachment"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/bookmark": {
+      "name": "@react-pdf-viewer/bookmark",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/bookmark"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/core": {
+      "name": "@react-pdf-viewer/core",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "pdfjs-dist"
+      ],
+      "effects": [
+        "@react-pdf-viewer/attachment",
+        "@react-pdf-viewer/bookmark",
+        "@react-pdf-viewer/default-layout",
+        "@react-pdf-viewer/full-screen",
+        "@react-pdf-viewer/get-file",
+        "@react-pdf-viewer/open",
+        "@react-pdf-viewer/page-navigation",
+        "@react-pdf-viewer/print",
+        "@react-pdf-viewer/properties",
+        "@react-pdf-viewer/rotate",
+        "@react-pdf-viewer/scroll-mode",
+        "@react-pdf-viewer/search",
+        "@react-pdf-viewer/selection-mode",
+        "@react-pdf-viewer/theme",
+        "@react-pdf-viewer/thumbnail",
+        "@react-pdf-viewer/toolbar",
+        "@react-pdf-viewer/zoom"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/core"
+      ],
+      "fixAvailable": false
+    },
+    "@react-pdf-viewer/default-layout": {
+      "name": "@react-pdf-viewer/default-layout",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@react-pdf-viewer/attachment",
+        "@react-pdf-viewer/bookmark",
+        "@react-pdf-viewer/core",
+        "@react-pdf-viewer/thumbnail",
+        "@react-pdf-viewer/toolbar"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/default-layout"
+      ],
+      "fixAvailable": false
+    },
+    "@react-pdf-viewer/full-screen": {
+      "name": "@react-pdf-viewer/full-screen",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/full-screen"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/get-file": {
+      "name": "@react-pdf-viewer/get-file",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/get-file"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/open": {
+      "name": "@react-pdf-viewer/open",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/open"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/page-navigation": {
+      "name": "@react-pdf-viewer/page-navigation",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/page-navigation"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/print": {
+      "name": "@react-pdf-viewer/print",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/print"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/properties": {
+      "name": "@react-pdf-viewer/properties",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/properties"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/rotate": {
+      "name": "@react-pdf-viewer/rotate",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/rotate"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/scroll-mode": {
+      "name": "@react-pdf-viewer/scroll-mode",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/scroll-mode"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/search": {
+      "name": "@react-pdf-viewer/search",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/search"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/selection-mode": {
+      "name": "@react-pdf-viewer/selection-mode",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/selection-mode"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/theme": {
+      "name": "@react-pdf-viewer/theme",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [
+        "@react-pdf-viewer/toolbar"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/theme"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/thumbnail": {
+      "name": "@react-pdf-viewer/thumbnail",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/thumbnail"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/toolbar": {
+      "name": "@react-pdf-viewer/toolbar",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core",
+        "@react-pdf-viewer/full-screen",
+        "@react-pdf-viewer/get-file",
+        "@react-pdf-viewer/open",
+        "@react-pdf-viewer/page-navigation",
+        "@react-pdf-viewer/print",
+        "@react-pdf-viewer/properties",
+        "@react-pdf-viewer/rotate",
+        "@react-pdf-viewer/scroll-mode",
+        "@react-pdf-viewer/search",
+        "@react-pdf-viewer/selection-mode",
+        "@react-pdf-viewer/theme",
+        "@react-pdf-viewer/zoom"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/toolbar"
+      ],
+      "fixAvailable": true
+    },
+    "@react-pdf-viewer/zoom": {
+      "name": "@react-pdf-viewer/zoom",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@react-pdf-viewer/core"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@react-pdf-viewer/zoom"
+      ],
+      "fixAvailable": true
+    },
+    "@sentry/node": {
+      "name": "@sentry/node",
+      "severity": "low",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1101875,
+          "name": "@sentry/node",
+          "dependency": "@sentry/node",
+          "title": "Potential DoS when using ContextLines integration",
+          "url": "https://github.com/advisories/GHSA-r5w7-f542-q2j4",
+          "severity": "low",
+          "cwe": [
+            "CWE-774"
+          ],
+          "cvss": {
+            "score": 3.7,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:L"
+          },
+          "range": ">=8.10.0 <8.49.0"
+        }
+      ],
+      "effects": [],
+      "range": "8.10.0 - 8.48.0",
+      "nodes": [
+        "node_modules/@sentry/node"
+      ],
+      "fixAvailable": true
+    },
+    "axios": {
+      "name": "axios",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1098583,
+          "name": "axios",
+          "dependency": "axios",
+          "title": "Server-Side Request Forgery in axios",
+          "url": "https://github.com/advisories/GHSA-8hc4-vh64-cxmj",
+          "severity": "high",
+          "cwe": [
+            "CWE-918"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=1.3.2 <=1.7.3"
+        },
+        {
+          "source": 1103618,
+          "name": "axios",
+          "dependency": "axios",
+          "title": "axios Requests Vulnerable To Possible SSRF and Credential Leakage via Absolute URL",
+          "url": "https://github.com/advisories/GHSA-jr5f-v2jv-69x6",
+          "severity": "high",
+          "cwe": [
+            "CWE-918"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=1.0.0 <1.8.2"
+        }
+      ],
+      "effects": [],
+      "range": "1.0.0 - 1.8.1",
+      "nodes": [
+        "node_modules/axios"
+      ],
+      "fixAvailable": true
+    },
+    "body-parser": {
+      "name": "body-parser",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1099520,
+          "name": "body-parser",
+          "dependency": "body-parser",
+          "title": "body-parser vulnerable to denial of service when url encoding is enabled",
+          "url": "https://github.com/advisories/GHSA-qwcr-r2fm-qrc7",
+          "severity": "high",
+          "cwe": [
+            "CWE-405"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<1.20.3"
+        }
+      ],
+      "effects": [
+        "express"
+      ],
+      "range": "<1.20.3",
+      "nodes": [
+        "node_modules/body-parser"
+      ],
+      "fixAvailable": true
+    },
+    "brace-expansion": {
+      "name": "brace-expansion",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1105443,
+          "name": "brace-expansion",
+          "dependency": "brace-expansion",
+          "title": "brace-expansion Regular Expression Denial of Service vulnerability",
+          "url": "https://github.com/advisories/GHSA-v6h2-p8h4-qcjw",
+          "severity": "low",
+          "cwe": [
+            "CWE-400"
+          ],
+          "cvss": {
+            "score": 3.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:N/A:L"
+          },
+          "range": ">=1.0.0 <=1.1.11"
+        },
+        {
+          "source": 1105444,
+          "name": "brace-expansion",
+          "dependency": "brace-expansion",
+          "title": "brace-expansion Regular Expression Denial of Service vulnerability",
+          "url": "https://github.com/advisories/GHSA-v6h2-p8h4-qcjw",
+          "severity": "low",
+          "cwe": [
+            "CWE-400"
+          ],
+          "cvss": {
+            "score": 3.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:N/A:L"
+          },
+          "range": ">=2.0.0 <=2.0.1"
+        }
+      ],
+      "effects": [],
+      "range": "1.0.0 - 1.1.11 || 2.0.0 - 2.0.1",
+      "nodes": [
+        "node_modules/@typescript-eslint/typescript-estree/node_modules/brace-expansion",
+        "node_modules/brace-expansion",
+        "node_modules/glob/node_modules/brace-expansion"
+      ],
+      "fixAvailable": true
+    },
+    "cookie": {
+      "name": "cookie",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1103907,
+          "name": "cookie",
+          "dependency": "cookie",
+          "title": "cookie accepts cookie name, path, and domain with out of bounds characters",
+          "url": "https://github.com/advisories/GHSA-pxg6-pf52-xh8x",
+          "severity": "low",
+          "cwe": [
+            "CWE-74"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<0.7.0"
+        }
+      ],
+      "effects": [
+        "cookies-next",
+        "express"
+      ],
+      "range": "<0.7.0",
+      "nodes": [
+        "node_modules/cookie"
+      ],
+      "fixAvailable": true
+    },
+    "cookies-next": {
+      "name": "cookies-next",
+      "severity": "low",
+      "isDirect": true,
+      "via": [
+        "cookie"
+      ],
+      "effects": [],
+      "range": "<=4.2.1",
+      "nodes": [
+        "node_modules/cookies-next"
+      ],
+      "fixAvailable": true
+    },
+    "cross-spawn": {
+      "name": "cross-spawn",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1104664,
+          "name": "cross-spawn",
+          "dependency": "cross-spawn",
+          "title": "Regular Expression Denial of Service (ReDoS) in cross-spawn",
+          "url": "https://github.com/advisories/GHSA-3xgq-45jj-v275",
+          "severity": "high",
+          "cwe": [
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": ">=7.0.0 <7.0.5"
+        }
+      ],
+      "effects": [],
+      "range": "7.0.0 - 7.0.4",
+      "nodes": [
+        "node_modules/cross-spawn"
+      ],
+      "fixAvailable": true
+    },
+    "express": {
+      "name": "express",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1100530,
+          "name": "express",
+          "dependency": "express",
+          "title": "express vulnerable to XSS via response.redirect()",
+          "url": "https://github.com/advisories/GHSA-qw6h-vgh9-j6wx",
+          "severity": "low",
+          "cwe": [
+            "CWE-79"
+          ],
+          "cvss": {
+            "score": 5,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:L"
+          },
+          "range": "<4.20.0"
+        },
+        "body-parser",
+        "cookie",
+        "path-to-regexp",
+        "send",
+        "serve-static"
+      ],
+      "effects": [],
+      "range": "<=4.21.0 || 5.0.0-alpha.1 - 5.0.0",
+      "nodes": [
+        "node_modules/express"
+      ],
+      "fixAvailable": true
+    },
+    "micromatch": {
+      "name": "micromatch",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1098681,
+          "name": "micromatch",
+          "dependency": "micromatch",
+          "title": "Regular Expression Denial of Service (ReDoS) in micromatch",
+          "url": "https://github.com/advisories/GHSA-952p-6rrq-rcjv",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 5.3,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+          },
+          "range": "<4.0.8"
+        }
+      ],
+      "effects": [],
+      "range": "<4.0.8",
+      "nodes": [
+        "node_modules/micromatch"
+      ],
+      "fixAvailable": true
+    },
+    "nanoid": {
+      "name": "nanoid",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1101163,
+          "name": "nanoid",
+          "dependency": "nanoid",
+          "title": "Predictable results in nanoid generation when given non-integer values",
+          "url": "https://github.com/advisories/GHSA-mwcw-c2x4-8c55",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-835"
+          ],
+          "cvss": {
+            "score": 4.3,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N"
+          },
+          "range": "<3.3.8"
+        }
+      ],
+      "effects": [],
+      "range": "<3.3.8",
+      "nodes": [
+        "node_modules/nanoid"
+      ],
+      "fixAvailable": true
+    },
+    "next": {
+      "name": "next",
+      "severity": "critical",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1099638,
+          "name": "next",
+          "dependency": "next",
+          "title": "Next.js Cache Poisoning",
+          "url": "https://github.com/advisories/GHSA-gp8f-8m3g-qvj9",
+          "severity": "high",
+          "cwe": [
+            "CWE-349",
+            "CWE-639"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": ">=14.0.0 <14.2.10"
+        },
+        {
+          "source": 1100421,
+          "name": "next",
+          "dependency": "next",
+          "title": "Denial of Service condition in Next.js image optimization",
+          "url": "https://github.com/advisories/GHSA-g77x-44xx-532m",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-674"
+          ],
+          "cvss": {
+            "score": 5.9,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": ">=10.0.0 <14.2.7"
+        },
+        {
+          "source": 1101380,
+          "name": "next",
+          "dependency": "next",
+          "title": "Next.js authorization bypass vulnerability",
+          "url": "https://github.com/advisories/GHSA-7gfc-8cq8-jh5f",
+          "severity": "high",
+          "cwe": [
+            "CWE-285"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+          },
+          "range": ">=9.5.5 <14.2.15"
+        },
+        {
+          "source": 1101438,
+          "name": "next",
+          "dependency": "next",
+          "title": "Next.js Allows a Denial of Service (DoS) with Server Actions",
+          "url": "https://github.com/advisories/GHSA-7m27-7ghc-44w9",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-770"
+          ],
+          "cvss": {
+            "score": 5.3,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+          },
+          "range": ">=14.0.0 <14.2.21"
+        },
+        {
+          "source": 1103622,
+          "name": "next",
+          "dependency": "next",
+          "title": "Authorization Bypass in Next.js Middleware",
+          "url": "https://github.com/advisories/GHSA-f82v-jwr5-mffw",
+          "severity": "critical",
+          "cwe": [
+            "CWE-285"
+          ],
+          "cvss": {
+            "score": 9.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N"
+          },
+          "range": ">=14.0.0 <14.2.25"
+        },
+        {
+          "source": 1104490,
+          "name": "next",
+          "dependency": "next",
+          "title": "Next.js Race Condition to Cache Poisoning",
+          "url": "https://github.com/advisories/GHSA-qpjv-v59x-3qc4",
+          "severity": "low",
+          "cwe": [
+            "CWE-362"
+          ],
+          "cvss": {
+            "score": 3.7,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N"
+          },
+          "range": "<14.2.24"
+        },
+        {
+          "source": 1105461,
+          "name": "next",
+          "dependency": "next",
+          "title": "Information exposure in Next.js dev server due to lack of origin verification",
+          "url": "https://github.com/advisories/GHSA-3h52-269p-cp9r",
+          "severity": "low",
+          "cwe": [
+            "CWE-1385"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=13.0 <14.2.30"
+        }
+      ],
+      "effects": [],
+      "range": "<=14.2.29",
+      "nodes": [
+        "node_modules/next"
+      ],
+      "fixAvailable": {
+        "name": "next",
+        "version": "14.2.30",
+        "isSemVerMajor": false
+      }
+    },
+    "path-to-regexp": {
+      "name": "path-to-regexp",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1101850,
+          "name": "path-to-regexp",
+          "dependency": "path-to-regexp",
+          "title": "path-to-regexp outputs backtracking regular expressions",
+          "url": "https://github.com/advisories/GHSA-9wv6-86v2-598j",
+          "severity": "high",
+          "cwe": [
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<0.1.10"
+        },
+        {
+          "source": 1105199,
+          "name": "path-to-regexp",
+          "dependency": "path-to-regexp",
+          "title": "path-to-regexp contains a ReDoS",
+          "url": "https://github.com/advisories/GHSA-rhx6-c78j-4q9w",
+          "severity": "high",
+          "cwe": [
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<0.1.12"
+        }
+      ],
+      "effects": [
+        "express"
+      ],
+      "range": "<=0.1.11",
+      "nodes": [
+        "node_modules/path-to-regexp"
+      ],
+      "fixAvailable": true
+    },
+    "pdfjs-dist": {
+      "name": "pdfjs-dist",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1104044,
+          "name": "pdfjs-dist",
+          "dependency": "pdfjs-dist",
+          "title": "PDF.js vulnerable to arbitrary JavaScript execution upon opening a malicious PDF",
+          "url": "https://github.com/advisories/GHSA-wgrm-67xf-hhpq",
+          "severity": "high",
+          "cwe": [
+            "CWE-754"
+          ],
+          "cvss": {
+            "score": 8.8,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H"
+          },
+          "range": "<=4.1.392"
+        }
+      ],
+      "effects": [
+        "@react-pdf-viewer/core"
+      ],
+      "range": "<=4.1.392",
+      "nodes": [
+        "node_modules/pdfjs-dist"
+      ],
+      "fixAvailable": false
+    },
+    "send": {
+      "name": "send",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1100526,
+          "name": "send",
+          "dependency": "send",
+          "title": "send vulnerable to template injection that can lead to XSS",
+          "url": "https://github.com/advisories/GHSA-m6fv-jmcg-4jfg",
+          "severity": "low",
+          "cwe": [
+            "CWE-79"
+          ],
+          "cvss": {
+            "score": 5,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:L"
+          },
+          "range": "<0.19.0"
+        }
+      ],
+      "effects": [
+        "express",
+        "serve-static"
+      ],
+      "range": "<0.19.0",
+      "nodes": [
+        "node_modules/send"
+      ],
+      "fixAvailable": true
+    },
+    "serve-static": {
+      "name": "serve-static",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1100528,
+          "name": "serve-static",
+          "dependency": "serve-static",
+          "title": "serve-static vulnerable to template injection that can lead to XSS",
+          "url": "https://github.com/advisories/GHSA-cm22-4g7w-348p",
+          "severity": "low",
+          "cwe": [
+            "CWE-79"
+          ],
+          "cvss": {
+            "score": 5,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:L"
+          },
+          "range": "<1.16.0"
+        },
+        "send"
+      ],
+      "effects": [],
+      "range": "<=1.16.0",
+      "nodes": [
+        "node_modules/serve-static"
+      ],
+      "fixAvailable": true
+    },
+    "sweetalert2": {
+      "name": "sweetalert2",
+      "severity": "low",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1094698,
+          "name": "sweetalert2",
+          "dependency": "sweetalert2",
+          "title": "sweetalert2 v11.6.14 and above contains potentially undesirable behavior",
+          "url": "https://github.com/advisories/GHSA-mrr8-v49w-3333",
+          "severity": "low",
+          "cwe": [
+            "CWE-440"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=11.6.14"
+        }
+      ],
+      "effects": [],
+      "range": ">=11.6.14",
+      "nodes": [
+        "node_modules/sweetalert2"
+      ],
+      "fixAvailable": {
+        "name": "sweetalert2",
+        "version": "11.6.13",
+        "isSemVerMajor": true
+      }
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 7,
+      "moderate": 3,
+      "high": 24,
+      "critical": 1,
+      "total": 35
+    },
+    "dependencies": {
+      "prod": 458,
+      "dev": 300,
+      "optional": 17,
+      "peer": 3,
+      "peerOptional": 0,
+      "total": 773
+    }
+  }
+}
