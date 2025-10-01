@@ -22,7 +22,6 @@ import {
   faDownload,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import clsx from "clsx";
 
 //------------------------------------------------------------
 // Constantes & helpers
@@ -86,11 +85,16 @@ const EditSaleImproved = () => {
     handleSubmit,
     setValue,
     reset,
-    formState: { errors, isDirty },
+    getValues, // ✅ on l’utilise pour lire l’état au clic
+    formState: { errors },
   } = useForm({
     defaultValues: DEFAULT_VALUES,
     resolver: yupResolver(schema),
   });
+
+  // ✅ Hooks au bon endroit (pas dans des callbacks)
+  const ttc = useWatch({ control, name: "MONTANT TTC" });
+  const taux = useWatch({ control, name: "TAUX TVA" });
 
   //--------------------------------------------------------
   // Charge la vente existante
@@ -104,8 +108,14 @@ const EditSaleImproved = () => {
         const sale = data.data;
 
         // Normalise les dates pour les pickers
-        sale["DATE DE VENTE"] = sale["DATE DE VENTE"] ? new Date(sale["DATE DE VENTE"]) : queryDate ? new Date(queryDate) : new Date();
-        sale["PREVISION CHANTIER"] = sale["PREVISION CHANTIER"] ? new Date(sale["PREVISION CHANTIER"]) : null;
+        sale["DATE DE VENTE"] = sale["DATE DE VENTE"]
+          ? new Date(sale["DATE DE VENTE"])
+          : queryDate
+          ? new Date(queryDate)
+          : new Date();
+        sale["PREVISION CHANTIER"] = sale["PREVISION CHANTIER"]
+          ? new Date(sale["PREVISION CHANTIER"])
+          : null;
 
         reset({ ...DEFAULT_VALUES, ...sale });
       } catch (err) {
@@ -120,9 +130,6 @@ const EditSaleImproved = () => {
   //--------------------------------------------------------
   // Calcul dynamique du HT sur changement TVA / TTC
   //--------------------------------------------------------
-  const ttc = useWatch({ control, name: "MONTANT TTC" });
-  const taux = useWatch({ control, name: "TAUX TVA" });
-
   useEffect(() => {
     const ttcNum = parseFloat(ttc);
     const tauxNum = parseFloat(taux) || 10;
@@ -141,7 +148,9 @@ const EditSaleImproved = () => {
       const payload = {
         ...values,
         "DATE DE VENTE": values["DATE DE VENTE"].toISOString(),
-        "PREVISION CHANTIER": values["PREVISION CHANTIER"] ? values["PREVISION CHANTIER"].toISOString() : "",
+        "PREVISION CHANTIER": values["PREVISION CHANTIER"]
+          ? values["PREVISION CHANTIER"].toISOString()
+          : "",
       };
 
       const res = await fetch(`/api/ventes/${id}`, {
@@ -162,11 +171,16 @@ const EditSaleImproved = () => {
   //--------------------------------------------------------
   const copyCSV = (data) => {
     const csvLine = Object.values(data).join(";");
-    navigator.clipboard.writeText(csvLine).then(() => toast.success("CSV copié !"));
+    navigator.clipboard
+      .writeText(csvLine)
+      .then(() => toast.success("CSV copié !"));
   };
 
   const downloadCSV = (data) => {
-    const csv = [Object.keys(data).join(";"), Object.values(data).join(";")].join("\n");
+    const csv = [
+      Object.keys(data).join(";"),
+      Object.values(data).join(";"),
+    ].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -177,15 +191,21 @@ const EditSaleImproved = () => {
   };
 
   //--------------------------------------------------------
-  if (loading) return <div className="flex h-screen items-center justify-center">Chargement…</div>;
-  if (error) return <div className="text-red-600 text-center mt-10">Erreur : {error}</div>;
+  if (loading)
+    return (
+      <div className="flex h-screen items-center justify-center">
+        Chargement…
+      </div>
+    );
+  if (error)
+    return (
+      <div className="text-red-600 text-center mt-10">Erreur : {error}</div>
+    );
 
   // Le composant de champ générique pour factoriser le markup
-  const Field = ({ label, name, rules, children }) => (
+  const Field = ({ label, name, children }) => (
     <div>
-      <label className="block mb-1 font-semibold text-gray-800">
-        {label}
-      </label>
+      <label className="block mb-1 font-semibold text-gray-800">{label}</label>
       {children}
       {errors[name] && (
         <p className="text-red-600 text-xs mt-1">{errors[name].message}</p>
@@ -197,7 +217,9 @@ const EditSaleImproved = () => {
     <div className="min-h-screen bg-gradient-to-br from-green-200 to-gray-600">
       <Navbar />
       <div className="max-w-4xl mx-auto py-8 px-4">
-        <h2 className="text-2xl font-bold text-white text-center mb-6">Éditer la vente</h2>
+        <h2 className="text-2xl font-bold text-white text-center mb-6">
+          Éditer la vente
+        </h2>
 
         <form
           onSubmit={handleSubmit(onSubmit)}
@@ -224,7 +246,9 @@ const EditSaleImproved = () => {
             <Controller
               control={control}
               name="NUMERO BC"
-              render={({ field }) => <input {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input {...field} className="border p-2 rounded w-full" />
+              )}
             />
           </Field>
 
@@ -233,7 +257,9 @@ const EditSaleImproved = () => {
             <Controller
               control={control}
               name="CIVILITE"
-              render={({ field }) => <input {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input {...field} className="border p-2 rounded w-full" />
+              )}
             />
           </Field>
 
@@ -242,14 +268,18 @@ const EditSaleImproved = () => {
             <Controller
               control={control}
               name="NOM DU CLIENT"
-              render={({ field }) => <input {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input {...field} className="border p-2 rounded w-full" />
+              )}
             />
           </Field>
           <Field label="Prénom" name="prenom">
             <Controller
               control={control}
               name="prenom"
-              render={({ field }) => <input {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input {...field} className="border p-2 rounded w-full" />
+              )}
             />
           </Field>
 
@@ -258,28 +288,36 @@ const EditSaleImproved = () => {
             <Controller
               control={control}
               name="ADRESSE DU CLIENT"
-              render={({ field }) => <input {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input {...field} className="border p-2 rounded w-full" />
+              )}
             />
           </Field>
           <Field label="CODE INTERP etage" name="CODE INTERP etage">
             <Controller
               control={control}
               name="CODE INTERP etage"
-              render={({ field }) => <input {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input {...field} className="border p-2 rounded w-full" />
+              )}
             />
           </Field>
           <Field label="Ville" name="VILLE">
             <Controller
               control={control}
               name="VILLE"
-              render={({ field }) => <input {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input {...field} className="border p-2 rounded w-full" />
+              )}
             />
           </Field>
           <Field label="CP" name="CP">
             <Controller
               control={control}
               name="CP"
-              render={({ field }) => <input {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input {...field} className="border p-2 rounded w-full" />
+              )}
             />
           </Field>
 
@@ -288,14 +326,18 @@ const EditSaleImproved = () => {
             <Controller
               control={control}
               name="TELEPHONE"
-              render={({ field }) => <input {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input {...field} className="border p-2 rounded w-full" />
+              )}
             />
           </Field>
           <Field label="Vendeur" name="VENDEUR">
             <Controller
               control={control}
               name="VENDEUR"
-              render={({ field }) => <input {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input {...field} className="border p-2 rounded w-full" />
+              )}
             />
           </Field>
 
@@ -304,7 +346,9 @@ const EditSaleImproved = () => {
             <Controller
               control={control}
               name="DESIGNATION"
-              render={({ field }) => <input {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input {...field} className="border p-2 rounded w-full" />
+              )}
             />
           </Field>
 
@@ -316,7 +360,9 @@ const EditSaleImproved = () => {
               render={({ field }) => (
                 <select {...field} className="border p-2 rounded w-full">
                   {[5.5, 10, 20, 0].map((v) => (
-                    <option key={v} value={v}>{v}%</option>
+                    <option key={v} value={v}>
+                      {v}%
+                    </option>
                   ))}
                 </select>
               )}
@@ -326,7 +372,15 @@ const EditSaleImproved = () => {
             <Controller
               control={control}
               name="MONTANT TTC"
-              render={({ field }) => <input type="number" step="0.01" min="0" {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  {...field}
+                  className="border p-2 rounded w-full"
+                />
+              )}
             />
           </Field>
 
@@ -335,7 +389,13 @@ const EditSaleImproved = () => {
             <Controller
               control={control}
               name="MONTANT HT"
-              render={({ field }) => <input {...field} readOnly className="border p-2 rounded w-full bg-gray-100" />}
+              render={({ field }) => (
+                <input
+                  {...field}
+                  readOnly
+                  className="border p-2 rounded w-full bg-gray-100"
+                />
+              )}
             />
           </Field>
 
@@ -344,7 +404,15 @@ const EditSaleImproved = () => {
             <Controller
               control={control}
               name="MONTANT ANNULE"
-              render={({ field }) => <input type="number" step="0.01" min="0" {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  {...field}
+                  className="border p-2 rounded w-full"
+                />
+              )}
             />
           </Field>
 
@@ -386,7 +454,9 @@ const EditSaleImproved = () => {
             <Controller
               control={control}
               name="OBSERVATION"
-              render={({ field }) => <input {...field} className="border p-2 rounded w-full" />}
+              render={({ field }) => (
+                <input {...field} className="border p-2 rounded w-full" />
+              )}
             />
           </Field>
         </form>
@@ -399,27 +469,36 @@ const EditSaleImproved = () => {
           >
             <FontAwesomeIcon icon={faSave} /> Valider
           </button>
+
           <button
             onClick={() => router.push(`/file/details/${id}`)}
             className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded"
           >
             <FontAwesomeIcon icon={faFile} /> Fichier
           </button>
+
+          {/* ❌ plus de useWatch ici — on lit l’état au moment du clic */}
           <button
-            onClick={() => copyCSV(useWatch({ control }))}
+            onClick={() => copyCSV(getValues())}
             className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-2 rounded"
           >
             <FontAwesomeIcon icon={faCopy} /> Copier CSV
           </button>
           <button
-            onClick={() => downloadCSV(useWatch({ control }))}
+            onClick={() => downloadCSV(getValues())}
             className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded"
           >
             <FontAwesomeIcon icon={faDownload} /> Télécharger CSV
           </button>
         </div>
       </div>
-      <ToastContainer position="bottom-center" autoClose={2500} hideProgressBar newestOnTop />
+
+      <ToastContainer
+        position="bottom-center"
+        autoClose={2500}
+        hideProgressBar
+        newestOnTop
+      />
     </div>
   );
 };
