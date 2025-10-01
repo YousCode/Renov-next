@@ -1,73 +1,131 @@
 "use client";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSelector } from 'react-redux';
+import { useSelector } from "react-redux";
+
+// utils
+const norm = (v) =>
+  (v ?? "")
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const safe = (obj, key) => (obj && obj[key] != null ? String(obj[key]) : "");
 
 const ExplorerView = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [searchFilter, setSearchFilter] = useState("nom");
+  const [searchFilter, setSearchFilter] = useState("nom"); // nom | phone | adresse | designation | ville
   const router = useRouter();
 
   const user = useSelector((state) => state.Auth.user);
 
   const handleInputChange = async (e) => {
-    const term = e.target.value.toLowerCase();
-    setSearchTerm(term);
-    if (term) {
-      setIsSearching(true);
-      try {
-        const response = await fetch(`/api/ventes/search?searchTerm=${encodeURIComponent(term)}`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch: ${response.statusText}`);
-        }
-        const data = await response.json();
-        if (data.success) {
-          const uniqueResults = Array.from(new Set(data.data.map(sale => ({
-            name: sale["NOM DU CLIENT"],
-            phone: sale["TELEPHONE"],
-            address: sale["ADRESSE DU CLIENT"],
-            designation: sale["DESIGNATION"],
-            sales: data.data.filter(item => {
-              switch (searchFilter) {
-                case "nom":
-                  return item["NOM DU CLIENT"].toLowerCase().startsWith(term);
-                case "phone":
-                  return item["TELEPHONE"].includes(term);
-                case "adresse":
-                  return item["ADRESSE DU CLIENT"].toLowerCase().includes(term);
-                case "designation":
-                  return item["DESIGNATION"].toLowerCase().includes(term);
-                default:
-                  return false;
-              }
-            })
-          }))));
-          setSearchResults(uniqueResults.filter(result => {
-            switch (searchFilter) {
-              case "nom":
-                return result.name.toLowerCase().startsWith(term);
-              case "phone":
-                return result.phone.includes(term);
-              case "adresse":
-                return result.address.toLowerCase().includes(term);
-              case "designation":
-                return result.designation.toLowerCase().includes(term);
-              default:
-                return false;
-            }
-          }));
-        } else {
-          setSearchResults([]);
-        }
-      } catch (error) {
-        console.error("Search error:", error);
-      } finally {
-        setIsSearching(false);
-      }
-    } else {
+    const raw = e.target.value;
+    const term = norm(raw);
+    setSearchTerm(raw);
+
+    if (!term) {
       setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const response = await fetch(
+        `/api/ventes/search?searchTerm=${encodeURIComponent(raw)}`
+      );
+      if (!response.ok) {
+        throw new Error(`Failed to fetch: ${response.statusText}`);
+      }
+      const data = await response.json();
+
+      if (!data.success) {
+        setSearchResults([]);
+        return;
+      }
+
+      // 1) Filtrage côté client selon le champ choisi
+      const filtered = data.data.filter((item) => {
+        const nom = norm(safe(item, "NOM DU CLIENT"));
+        const phone = safe(item, "TELEPHONE"); // on ne normalise pas pour garder les chiffres
+        const adresse = norm(safe(item, "ADRESSE DU CLIENT"));
+        const designation = norm(safe(item, "DESIGNATION"));
+        const ville = norm(safe(item, "VILLE"));
+        const cp = norm(safe(item, "CP"));
+
+        switch (searchFilter) {
+          case "nom":
+            return nom.startsWith(term);
+          case "phone":
+            return phone.includes(raw); // garder la saisie brute pour les chiffres/espace
+          case "adresse":
+            return adresse.includes(term);
+          case "designation":
+            return designation.includes(term);
+          case "ville":
+            // on cherche sur ville OU code postal
+            return ville.includes(term) || cp.includes(term);
+          default:
+            return false;
+        }
+      });
+
+      // 2) Regrouper les résultats par client (déduplication)
+      const map = new Map();
+      for (const sale of filtered) {
+        const name = safe(sale, "NOM DU CLIENT");
+        const phone = safe(sale, "TELEPHONE");
+        const address = safe(sale, "ADRESSE DU CLIENT");
+        const designation = safe(sale, "DESIGNATION");
+        const city = safe(sale, "VILLE");
+        const cp = safe(sale, "CP");
+        const key = `${name}|${phone}|${address}|${city}|${cp}`;
+
+        if (!map.has(key)) {
+          map.set(key, {
+            name,
+            phone,
+            address,
+            designation,
+            city,
+            cp,
+            sales: [sale],
+          });
+        } else {
+          map.get(key).sales.push(sale);
+        }
+      }
+
+      const uniqueResults = Array.from(map.values());
+
+      // 3) Filtre final sur l’aperçu (utile si l’API renvoie large)
+      const finalResults = uniqueResults.filter((result) => {
+        switch (searchFilter) {
+          case "nom":
+            return norm(result.name).startsWith(term);
+          case "phone":
+            return result.phone.includes(raw);
+          case "adresse":
+            return norm(result.address).includes(term);
+          case "designation":
+            return norm(result.designation).includes(term);
+          case "ville":
+            return norm(result.city).includes(term) || norm(result.cp).includes(term);
+          default:
+            return false;
+        }
+      });
+
+      setSearchResults(finalResults);
+    } catch (error) {
+      console.error("Search error:", error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -101,37 +159,39 @@ const ExplorerView = () => {
               <option value="phone">Téléphone</option>
               <option value="adresse">Adresse</option>
               <option value="designation">Désignation</option>
+              <option value="ville">Ville / CP</option>
             </select>
             {isSearching && <div>Recherche en cours...</div>}
           </div>
+
           <button
             onClick={handleViewAllSales}
             className="w-full bg-green-500 text-white p-3 rounded-lg mt-4"
           >
             Toutes les ventes
           </button>
-        {searchResults.length > 0 && (
-          <ul className="bg-white shadow-lg mt-4 max-h-60 text-black overflow-auto z-10 w-full border border-gray-300 rounded-lg">
-            {searchResults.map((result, index) => (
-              <li
-                key={index}
-                className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-200"
-                onClick={() => handleSelectSale(result.sales)}
-              >
-                {result.name} - {result.phone} - {result.address} - {result.designation}
-              </li>
-            ))}
-          </ul>
-        )}
+
+          {searchResults.length > 0 && (
+            <ul className="bg-white shadow-lg mt-4 max-h-60 text-black overflow-auto z-10 w-full border border-gray-300 rounded-lg">
+              {searchResults.map((result, index) => (
+                <li
+                  key={index}
+                  className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-200"
+                  onClick={() => handleSelectSale(result.sales)}
+                >
+                  {result.name} — {result.phone} — {result.address}
+                  {result.city ? ` — ${result.city}${result.cp ? ` (${result.cp})` : ""}` : ""}
+                  {result.designation ? ` — ${result.designation}` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
+
       <div className="lg:h-[calc(100vh-82px)] h-[calc(100vh-68px)] absolute lg:top-20 top-[68px] left-0 w-full">
         <div className="w-full h-[100%] bg-explore-gradient absolute bottom-0" />
-        <img
-          alt="bg"
-          src="/explore-bg.png"
-          className="w-full h-full object-cover"
-        />
+        <img alt="bg" src="/explore-bg.png" className="w-full h-full object-cover" />
       </div>
     </>
   );
