@@ -3,7 +3,7 @@ import User from '../../../models/user';
 import crypto from 'crypto';
 import { capture } from '../../../sentry.js'; // Assurez-vous d'avoir cette fonction utilitaire
 import { buildGenericTemplate } from '../../../emails.js'; // Assurez-vous d'avoir cette fonction utilitaire
-import { transacEmailApi } from "../../../sendinblue.js";
+
 
 export default async function handler(req, res) {
   await connectToDatabase();
