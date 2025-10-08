@@ -9,6 +9,7 @@ import React, {
   useEffect,
   useMemo,
   useCallback,
+  useRef,
 } from "react";
 import { useRouter } from "next/navigation";
 import Tesseract from "tesseract.js";
@@ -67,6 +68,14 @@ function getBaremeBgColor(b) {
   return { T1:"bg-green-300",T2:"bg-blue-300",T3:"bg-purple-300",T4:"bg-yellow-300",T6:"bg-red-300" }[b] || "";
 }
 
+const parseTVA = (raw) => {
+  const s = String(raw ?? "").replace("%","").replace(",",".").trim();
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  // borne douce : 0–20
+  return Math.max(0, Math.min(20, n));
+};
+
 // -------------------------------------------------
 // Nettoyage / déduplication
 // -------------------------------------------------
@@ -78,21 +87,16 @@ function processSalesData(salesData) {
 
     let ht = parseFloat(sale["MONTANT HT"]);
     let ttc = parseFloat(sale["MONTANT TTC"]);
-    let taux = parseFloat(sale["TAUX TVA"]);
+    let taux = parseTVA(sale["TAUX TVA"]);
 
-    if (!isNaN(taux) && taux > 0) {
-      if (taux > 100) taux /= 100;
-      taux = Math.min(Math.max(taux, 0.055), 0.2);
-    } else taux = null;
-
-    if (taux) {
-      if (isNaN(ttc) && !isNaN(ht)) ttc = ht * (1 + taux);
-      if (isNaN(ht) && !isNaN(ttc)) ht = ttc / (1 + taux);
+    if (taux !== null) {
+      if (isNaN(ttc) && !isNaN(ht)) ttc = ht * (1 + taux / 100);
+      if (isNaN(ht) && !isNaN(ttc)) ht = ttc / (1 + taux / 100);
     }
 
     sale["MONTANT HT"] = (ht ?? 0).toFixed(2);
     sale["MONTANT TTC"] = (ttc ?? 0).toFixed(2);
-    sale["TAUX TVA"]      = taux ? `${(taux*100).toFixed(1).replace(".",",")} %` : "";
+    sale["TAUX TVA"]      = taux !== null ? `${taux}%` : "";
     sale["BAREME COM"]    = sale["BAREME COM"] || "T5";
     sale["MONTANT COMMISSIONS"] = calculateCommission(sale);
 
@@ -124,7 +128,7 @@ const FiltersBar = ({
 }) => (
   <div className="flex flex-col items-center w-full mb-2 text-[10px]">
     <div className="flex flex-wrap items-center justify-center gap-1 mb-1">
-      <button onClick={toggleShowAll} className="px-2 py-1 bg-blue-500 text-white rounded">
+      <button type="button" onClick={toggleShowAll} className="px-2 py-1 bg-blue-500 text-white rounded">
         {showAllSales ? "Afficher mensuelles" : "Afficher toutes"}
       </button>
       <input
@@ -140,10 +144,10 @@ const FiltersBar = ({
       <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)} className="p-1 border rounded">
         <option value="asc">Asc</option><option value="desc">Desc</option>
       </select>
-      <button onClick={copyCSV} className="px-2 py-1 bg-purple-500 text-white rounded" title="Copier CSV">
+      <button type="button" onClick={copyCSV} className="px-2 py-1 bg-purple-500 text-white rounded" title="Copier CSV">
         <FontAwesomeIcon icon={faCopy}/>
       </button>
-      <button onClick={downloadCSV} className="px-2 py-1 bg-green-500 text-white rounded" title="Télécharger CSV">
+      <button type="button" onClick={downloadCSV} className="px-2 py-1 bg-green-500 text-white rounded" title="Télécharger CSV">
         <FontAwesomeIcon icon={faDownload}/>
       </button>
     </div>
@@ -151,7 +155,7 @@ const FiltersBar = ({
     {!showAllSales && (
       <div className="flex gap-1 flex-wrap justify-center">
         {months.map((m,i)=>(
-          <button key={m} onClick={()=>setSelectedMonth(i)}
+          <button type="button" key={m} onClick={()=>setSelectedMonth(i)}
             className={clsx("px-1 py-1 rounded whitespace-nowrap",
               selectedMonth===i?"bg-blue-500 text-white":"bg-gray-600 text-white")}>
             {m}
@@ -197,9 +201,9 @@ const SalesTable = ({
           const warnAddr  = !sale["ADRESSE DU CLIENT"] || !sale.VILLE;
           const rowClass  = clsx({"bg-red-200 animate-pulse":cancelled,"animate-pulse bg-yellow-100":warnAddr});
           const ttc = parseFloat(sale["MONTANT TTC"])||0,
-                ht  = parseFloat(sale["MONTANT HT"]) ||0,
-                paid = (sale.payments||[]).reduce((s,p)=>s+parseFloat(p.montant),0),
-                progress = ttc>0?paid/ttc*100:0;
+                ht  = parseFloat(sale["MONTANT HT"]) ||0;
+          const paid = (sale.payments||[]).reduce((s,p)=>s+parseFloat(p.montant||0),0);
+          const progress = ttc>0?paid/ttc*100:0;
 
           return (
             <tr key={sale._id} className={`${rowClass} hover:bg-gray-100`} onDoubleClick={()=>onDoubleClick(sale)}>
@@ -280,34 +284,34 @@ const TotalsRow = ({ showAllSales,totalTTC,totalHT }) => (
 // ------------------------------------------------------------------
 const ActionButtons = ({ sale,onEdit,onDetails,onCopy,onHide }) => (
   <div className="flex justify-center gap-1">
-    <button onClick={()=>onEdit(sale)} className="px-1 py-1 bg-blue-500 text-white rounded" aria-label="Modifier">
+    <button type="button" onClick={()=>onEdit(sale)} className="px-1 py-1 bg-blue-500 text-white rounded" aria-label="Modifier">
       <FontAwesomeIcon icon={faEdit}/>
     </button>
-    <button onClick={()=>onDetails(sale)} className="px-1 py-1 bg-green-500 text-white rounded" aria-label="Détails">
+    <button type="button" onClick={()=>onDetails(sale)} className="px-1 py-1 bg-green-500 text-white rounded" aria-label="Détails">
       <FontAwesomeIcon icon={faFile}/>
     </button>
-    <button onClick={()=>onCopy(sale)} className="px-1 py-1 bg-purple-500 text-white rounded" aria-label="Copier">
+    <button type="button" onClick={()=>onCopy(sale)} className="px-1 py-1 bg-purple-500 text-white rounded" aria-label="Copier">
       <FontAwesomeIcon icon={faCopy}/>
     </button>
-    <button onClick={()=>onHide(sale)} className="px-1 py-1 bg-red-500 text-white rounded" aria-label="Cacher">
+    <button type="button" onClick={()=>onHide(sale)} className="px-1 py-1 bg-red-500 text-white rounded" aria-label="Cacher">
       <FontAwesomeIcon icon={faTrash}/>
     </button>
   </div>
 );
 
 // ------------------------------------------------------------------
-// Modal Paiements (inchangé)
+// Modal Paiements (inchangé sauf sécurisations mineures)
 // ------------------------------------------------------------------
 const PaymentModal = ({ sale,payments,setPayments,onClose,onSave }) => {
   const { width,height } = useWindowSize();
   const [newPayment,setNewPayment] = useState({ amount:"",date:"",comment:"" });
   const [ocrLoading,setOcrLoading] = useState(false);
 
-  const totalPaid = useMemo(()=>payments.reduce((s,p)=>s+p.montant,0),[payments]);
+  const totalPaid = useMemo(()=>payments.reduce((s,p)=>s+(parseFloat(p.montant)||0),0),[payments]);
   const totalAmount = parseFloat(sale["MONTANT TTC"])||parseFloat(sale["MONTANT HT"])||0;
   const progress = totalAmount>0?totalPaid/totalAmount*100:0;
 
-  const extractAmount = (txt)=>txt.match(/(\\d+[\\.,]\\d{2})/)?.[1].replace(",",".");
+  const extractAmount = (txt)=>txt.match(/(\d+[\.,]\d{2})/)?.[1].replace(",", ".");
 
   const handleImageUpload = async (e)=>{
     const file = e.target.files[0]; if(!file) return;
@@ -320,7 +324,7 @@ const PaymentModal = ({ sale,payments,setPayments,onClose,onSave }) => {
   };
 
   const addPayment = ()=>{
-    const amt = parseFloat(newPayment.amount);
+    const amt = parseFloat(String(newPayment.amount).replace(",", "."));
     if(isNaN(amt)||!newPayment.date) return toast.error("Champs invalides");
     setPayments(p=>[...p,{ id:Date.now(),montant:amt,date:newPayment.date,comment:newPayment.comment }]);
     setNewPayment({ amount:"",date:"",comment:"" });
@@ -331,7 +335,7 @@ const PaymentModal = ({ sale,payments,setPayments,onClose,onSave }) => {
       <div className="bg-white w-11/12 md:w-2/3 lg:w-1/2 p-2 rounded-lg max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-xs font-bold">Paiements – {sale["NOM DU CLIENT"]}</h2>
-          <button onClick={onClose} aria-label="Fermer"><FontAwesomeIcon icon={faTimes}/></button>
+          <button type="button" onClick={onClose} aria-label="Fermer"><FontAwesomeIcon icon={faTimes}/></button>
         </div>
 
         <div className="mb-1 text-xs">
@@ -358,10 +362,10 @@ const PaymentModal = ({ sale,payments,setPayments,onClose,onSave }) => {
                     placeholder="Commentaire" className="p-1 border rounded w-full"/>
           <input type="file" accept="image/*" onChange={handleImageUpload}/>
           {ocrLoading&&<span>Analyse OCR…</span>}
-          <button onClick={addPayment} className="px-2 py-1 bg-green-600 text-white rounded">Ajouter</button>
+          <button type="button" onClick={addPayment} className="px-2 py-1 bg-green-600 text-white rounded">Ajouter</button>
         </div>
 
-        <button onClick={onSave} className="mt-2 px-2 py-1 bg-blue-600 text-white rounded">Sauvegarder</button>
+        <button type="button" onClick={onSave} className="mt-2 px-2 py-1 bg-blue-600 text-white rounded">Sauvegarder</button>
       </div>
       <Confetti width={width} height={height} recycle={false} numberOfPieces={150}/>
     </div>
@@ -386,17 +390,30 @@ const AllSales = () => {
   const [modalSale,setModalSale] = useState(null);
   const [hiddenSales,setHiddenSales] = useState(()=>typeof window==="undefined"?[]:JSON.parse(localStorage.getItem("hiddenSales")||"[]"));
 
+  const abortRef = useRef(null);
+
   const fetchSales = useCallback(async ()=>{
     setLoading(true);
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try{
-      const res = await fetch("/api/ventes");
+      const res = await fetch("/api/ventes", { signal: controller.signal });
       if(!res.ok) throw new Error(res.statusText);
       const data = await res.json();
-      setSales(processSalesData(data.data));
-    }catch(err){ setError(err.message); } finally{ setLoading(false);}
+      setSales(processSalesData(data.data || []));
+    }catch(err){
+      if (err?.name !== "AbortError") setError(err.message);
+    } finally{
+      setLoading(false);
+    }
   },[]);
 
-  useEffect(()=>{ fetchSales(); },[fetchSales]);
+  useEffect(()=>{
+    fetchSales();
+    return ()=> { if (abortRef.current) abortRef.current.abort(); };
+  },[fetchSales]);
 
   // Filtres
   const filteredSales = useMemo(()=>sales.filter(s=>{
@@ -488,35 +505,35 @@ const AllSales = () => {
 
   return (
     <div className="min-h-screen bg-gray-800 text-[10px] p-2 flex flex-col items-center">
-      <button onClick={()=>router.back()} className="mb-1 px-2 py-1 bg-gray-700 text-white rounded">Retour</button>
+      <button type="button" onClick={()=>router.back()} className="mb-1 px-2 py-1 bg-gray-700 text-white rounded">Retour</button>
 
       <FiltersBar
         showAllSales={showAllSales}
-        toggleShowAll={()=>setShowAllSales(v=>!v)}
+        toggleShowAll={()=>{ setShowAllSales(v=>!v); setCurrentPage(1); }}
         searchTerm={searchTerm}
         onSearchChange={e=>{setSearchTerm(e.target.value); setCurrentPage(1);}}
-        sortField={sortField} setSortField={setSortField}
-        sortOrder={sortOrder} setSortOrder={setSortOrder}
+        sortField={sortField} setSortField={(v)=>{ setSortField(v); setCurrentPage(1); }}
+        sortOrder={sortOrder} setSortOrder={(v)=>{ setSortOrder(v); setCurrentPage(1); }}
         copyCSV={handleCopyCSV} downloadCSV={handleDownloadCSV}
-        selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth}
-        selectedYear={selectedYear} setSelectedYear={setSelectedYear}
+        selectedMonth={selectedMonth} setSelectedMonth={(m)=>{ setSelectedMonth(m); setCurrentPage(1); }}
+        selectedYear={selectedYear} setSelectedYear={(y)=>{ setSelectedYear(y); setCurrentPage(1); }}
       />
 
       <SalesTable
         sales={paginatedSales} showAllSales={showAllSales}
         onDoubleClick={setModalSale}
-        onEdit={s=>router.push(`/sales/edit/${s._id}`)}
-        onDetails={s=>router.push(`/file/details/${s._id}`)}
+        onEdit={s=>window.location.assign(`/sales/edit/${s._id}`)}
+        onDetails={s=>window.location.assign(`/file/details/${s._id}`)}
         onCopy={handleCopySale} onHide={handleHideSale}
       />
 
       {/* Pagination */}
       {totalPages>1 && (
         <div className="flex gap-1 mb-2">
-          <button disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)}
+          <button type="button" disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)}
                   className="px-2 py-1 bg-gray-600 text-white rounded disabled:opacity-50">←</button>
           <span className="self-center text-white">{currentPage} / {totalPages}</span>
-          <button disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)}
+          <button type="button" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)}
                   className="px-2 py-1 bg-gray-600 text-white rounded disabled:opacity-50">→</button>
         </div>
       )}

@@ -3,6 +3,7 @@
 // ----------------------------------------------------------
 // EditSaleImproved.jsx – formulaire de mise à jour de vente
 // Version optimisée : React-Hook-Form + Yup + Toastify
+// + Correctifs: blocage Enter (no submit), TVA normalisée, virgules, etc.
 // ----------------------------------------------------------
 
 import React, { useEffect, useState } from "react";
@@ -26,8 +27,11 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 //------------------------------------------------------------
 // Constantes & helpers
 //------------------------------------------------------------
-const TVA_MIN = 5.5;
+const TVA_MIN = 0;   // on autorise 0% si besoin
 const TVA_MAX = 20;
+
+const parseNumber = (v) => Number(String(v ?? "").replace("%", "").replace(",", ".").trim());
+const isFiniteNum = (n) => Number.isFinite(n);
 
 const DEFAULT_VALUES = {
   "DATE DE VENTE": new Date(),
@@ -56,15 +60,15 @@ const schema = yup.object({
   prenom: yup.string().required("Prénom requis"),
   "ADRESSE DU CLIENT": yup.string().required("Adresse requise"),
   "TAUX TVA": yup
-    .number()
-    .min(TVA_MIN, `≥ ${TVA_MIN}`)
-    .max(TVA_MAX, `≤ ${TVA_MAX}`)
-    .required(),
+    .mixed()
+    .transform((_, orig) => parseNumber(orig))
+    .test("range", `Entre ${TVA_MIN}% et ${TVA_MAX}%`, (v) => isFiniteNum(v) && v >= TVA_MIN && v <= TVA_MAX)
+    .required("Taux requis"),
   "MONTANT TTC": yup
-    .number()
-    .typeError("Nombre invalide")
-    .positive("Doit être positif")
-    .required(),
+    .mixed()
+    .transform((_, orig) => parseNumber(orig))
+    .test("pos", "Doit être positif", (v) => isFiniteNum(v) && v >= 0)
+    .required("Montant TTC requis"),
 });
 
 //------------------------------------------------------------
@@ -85,7 +89,7 @@ const EditSaleImproved = () => {
     handleSubmit,
     setValue,
     reset,
-    getValues, // ✅ on l’utilise pour lire l’état au clic
+    getValues,
     formState: { errors },
   } = useForm({
     defaultValues: DEFAULT_VALUES,
@@ -105,19 +109,23 @@ const EditSaleImproved = () => {
         const res = await fetch(`/api/ventes/${id}`);
         if (!res.ok) throw new Error(res.statusText);
         const data = await res.json();
-        const sale = data.data;
+        const sale = data.data || {};
 
         // Normalise les dates pour les pickers
-        sale["DATE DE VENTE"] = sale["DATE DE VENTE"]
-          ? new Date(sale["DATE DE VENTE"])
-          : queryDate
-          ? new Date(queryDate)
-          : new Date();
-        sale["PREVISION CHANTIER"] = sale["PREVISION CHANTIER"]
-          ? new Date(sale["PREVISION CHANTIER"])
-          : null;
+        const dv = sale["DATE DE VENTE"] || queryDate || new Date().toISOString();
+        const pc = sale["PREVISION CHANTIER"] || null;
 
-        reset({ ...DEFAULT_VALUES, ...sale });
+        // Normalise TVA en nombre
+        const rawTaux = parseNumber(sale["TAUX TVA"]);
+        const tauxNum = isFiniteNum(rawTaux) ? Math.max(TVA_MIN, Math.min(TVA_MAX, rawTaux)) : 10;
+
+        reset({
+          ...DEFAULT_VALUES,
+          ...sale,
+          "DATE DE VENTE": dv ? new Date(dv) : new Date(),
+          "PREVISION CHANTIER": pc ? new Date(pc) : null,
+          "TAUX TVA": tauxNum,
+        });
       } catch (err) {
         setError(err.message);
       } finally {
@@ -131,11 +139,11 @@ const EditSaleImproved = () => {
   // Calcul dynamique du HT sur changement TVA / TTC
   //--------------------------------------------------------
   useEffect(() => {
-    const ttcNum = parseFloat(ttc);
-    const tauxNum = parseFloat(taux) || 10;
-    if (!isNaN(ttcNum)) {
+    const ttcNum = parseNumber(ttc);
+    const tauxNum = isFiniteNum(parseNumber(taux)) ? parseNumber(taux) : 10;
+    if (isFiniteNum(ttcNum)) {
       const ht = ttcNum / (1 + tauxNum / 100);
-      setValue("MONTANT HT", ht.toFixed(2), { shouldValidate: false });
+      setValue("MONTANT HT", ht.toFixed(2), { shouldValidate: false, shouldDirty: true });
     }
   }, [ttc, taux, setValue]);
 
@@ -147,9 +155,12 @@ const EditSaleImproved = () => {
       // Convert dates → ISO strings pour l’API
       const payload = {
         ...values,
-        "DATE DE VENTE": values["DATE DE VENTE"].toISOString(),
+        "TAUX TVA": isFiniteNum(values["TAUX TVA"]) ? Number(values["TAUX TVA"]) : 10,
+        "MONTANT TTC": isFiniteNum(parseNumber(values["MONTANT TTC"])) ? String(parseNumber(values["MONTANT TTC"])) : "0",
+        "MONTANT HT": isFiniteNum(parseNumber(values["MONTANT HT"])) ? String(parseNumber(values["MONTANT HT"])) : "0",
+        "DATE DE VENTE": values["DATE DE VENTE"] instanceof Date ? values["DATE DE VENTE"].toISOString() : values["DATE DE VENTE"],
         "PREVISION CHANTIER": values["PREVISION CHANTIER"]
-          ? values["PREVISION CHANTIER"].toISOString()
+          ? (values["PREVISION CHANTIER"] instanceof Date ? values["PREVISION CHANTIER"].toISOString() : values["PREVISION CHANTIER"])
           : "",
       };
 
@@ -223,6 +234,10 @@ const EditSaleImproved = () => {
 
         <form
           onSubmit={handleSubmit(onSubmit)}
+          onKeyDown={(e) => {
+            // Empêche le submit implicite quand on tape "Enter" dans un input
+            if (e.key === "Enter") e.preventDefault();
+          }}
           className="bg-white bg-opacity-90 rounded-lg shadow-2xl p-6 grid grid-cols-2 gap-6 text-sm"
         >
           {/* Date de vente */}
@@ -358,8 +373,13 @@ const EditSaleImproved = () => {
               control={control}
               name="TAUX TVA"
               render={({ field }) => (
-                <select {...field} className="border p-2 rounded w-full">
-                  {[5.5, 10, 20, 0].map((v) => (
+                <select
+                  {...field}
+                  value={field.value ?? 10}
+                  onChange={(e) => field.onChange(parseNumber(e.target.value))}
+                  className="border p-2 rounded w-full"
+                >
+                  {[0, 5.5, 10, 20].map((v) => (
                     <option key={v} value={v}>
                       {v}%
                     </option>
@@ -368,16 +388,20 @@ const EditSaleImproved = () => {
               )}
             />
           </Field>
+
           <Field label="Montant TTC" name="MONTANT TTC">
             <Controller
               control={control}
               name="MONTANT TTC"
               render={({ field }) => (
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
+                  type="text"           // text + inputMode = gère les virgules FR
+                  inputMode="decimal"
                   {...field}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(",", ".");
+                    field.onChange(val);
+                  }}
                   className="border p-2 rounded w-full"
                 />
               )}
@@ -406,10 +430,10 @@ const EditSaleImproved = () => {
               name="MONTANT ANNULE"
               render={({ field }) => (
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   {...field}
+                  onChange={(e) => field.onChange(e.target.value.replace(",", "."))}
                   className="border p-2 rounded w-full"
                 />
               )}
@@ -464,6 +488,7 @@ const EditSaleImproved = () => {
         {/* Boutons */}
         <div className="flex flex-wrap justify-center gap-4 mt-6">
           <button
+            type="button"
             onClick={handleSubmit(onSubmit)}
             className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded"
           >
@@ -471,20 +496,22 @@ const EditSaleImproved = () => {
           </button>
 
           <button
+            type="button"
             onClick={() => router.push(`/file/details/${id}`)}
             className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded"
           >
             <FontAwesomeIcon icon={faFile} /> Fichier
           </button>
 
-          {/* ❌ plus de useWatch ici — on lit l’état au moment du clic */}
           <button
+            type="button"
             onClick={() => copyCSV(getValues())}
             className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-2 rounded"
           >
             <FontAwesomeIcon icon={faCopy} /> Copier CSV
           </button>
           <button
+            type="button"
             onClick={() => downloadCSV(getValues())}
             className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded"
           >
