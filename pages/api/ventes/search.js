@@ -86,13 +86,12 @@ const getAllVentes = async (req, res) => {
       };
     }
 
-    const ventes = await Vente.find(query).exec();
-    const count = await Vente.countDocuments(query);
+    const ventes = await Vente.find(query).sort({ "DATE DE VENTE": -1 }).lean().exec();
 
     res.status(200).json({
       success: true,
       data: ventes,
-      totalItems: count
+      totalItems: ventes.length
     });
   } catch (error) {
     res.status(500).json({

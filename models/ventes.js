@@ -53,5 +53,10 @@ venteSchema.pre('save', function(next) {
   next();
 });
 
+venteSchema.index({ "DATE DE VENTE": -1 });
+venteSchema.index({ "NOM DU CLIENT": 1 });
+venteSchema.index({ "VENDEUR": 1 });
+venteSchema.index({ "TELEPHONE": 1 });
+
 const Vente = mongoose.models.Vente || mongoose.model('Vente', venteSchema);
 export default Vente;

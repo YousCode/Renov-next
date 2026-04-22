@@ -37,7 +37,7 @@ const addVente = async (req, res) => {
 
 const getAllVentes = async (req, res) => {
   try {
-    const { date } = req.query;
+    const { date, month, year } = req.query;
     let query = {};
 
     if (date) {
@@ -45,18 +45,20 @@ const getAllVentes = async (req, res) => {
       startDate.setUTCHours(0, 0, 0, 0);
       const endDate = new Date(startDate);
       endDate.setUTCDate(startDate.getUTCDate() + 1);
-
+      query = { "DATE DE VENTE": { $gte: startDate, $lt: endDate } };
+    } else if (month !== undefined && year !== undefined) {
+      const m = parseInt(month, 10);
+      const y = parseInt(year, 10);
       query = {
         "DATE DE VENTE": {
-          $gte: startDate,
-          $lt: endDate
+          $gte: new Date(Date.UTC(y, m, 1)),
+          $lt:  new Date(Date.UTC(y, m + 1, 1)),
         }
       };
     }
 
-    const ventes = await Vente.find(query).exec();
-    const count = await Vente.countDocuments(query);
-    res.status(200).json({ success: true, data: ventes, totalItems: count });
+    const ventes = await Vente.find(query).sort({ "DATE DE VENTE": -1 }).lean().exec();
+    res.status(200).json({ success: true, data: ventes, totalItems: ventes.length });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Erreur lors de la récupération des ventes', error: error.message });
   }

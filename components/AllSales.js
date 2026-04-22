@@ -31,7 +31,7 @@ import clsx from "clsx";
 // -----------------------------------------------
 // Constantes & Helpers
 // -----------------------------------------------
-const ITEMS_PER_PAGE = 500;
+const ITEMS_PER_PAGE = 50;
 
 const months = [
   "Janvier","Février","Mars","Avril","Mai","Juin",
@@ -108,9 +108,30 @@ function processSalesData(salesData) {
 // ------------------------------------------------------------------
 // Loader
 // ------------------------------------------------------------------
+const SkeletonRow = ({ delay }) => (
+  <div className="flex gap-2" style={{ animationDelay: `${delay}ms` }}>
+    {[1, 2, 3, 1, 2, 1].map((flex, j) => (
+      <div
+        key={j}
+        className="h-6 rounded bg-gray-700 animate-pulse"
+        style={{ flex, animationDelay: `${delay + j * 30}ms` }}
+      />
+    ))}
+  </div>
+);
+
 const Loader = () => (
-  <div className="flex items-center justify-center py-8">
-    <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600" />
+  <div className="min-h-screen bg-gray-800 flex flex-col items-center justify-center gap-8 px-6">
+    <img src="/logorenov.png" alt="Renov" className="h-14 opacity-90 drop-shadow-lg" />
+    <div className="w-full max-w-3xl space-y-3">
+      <div className="h-8 w-full rounded bg-gray-700 animate-pulse mb-2" />
+      {Array.from({ length: 10 }).map((_, i) => (
+        <SkeletonRow key={i} delay={i * 60} />
+      ))}
+    </div>
+    <p className="text-gray-500 text-xs tracking-widest uppercase animate-pulse">
+      Chargement en cours…
+    </p>
   </div>
 );
 
@@ -378,7 +399,7 @@ const PaymentModal = ({ sale,payments,setPayments,onClose,onSave }) => {
 const AllSales = () => {
   const router = useRouter();
   const [sales,setSales] = useState([]);
-  const [showAllSales,setShowAllSales] = useState(true);
+  const [showAllSales,setShowAllSales] = useState(false);
   const [selectedMonth,setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear,setSelectedYear] = useState(new Date().getFullYear());
   const [searchTerm,setSearchTerm] = useState("");
@@ -394,12 +415,16 @@ const AllSales = () => {
 
   const fetchSales = useCallback(async ()=>{
     setLoading(true);
+    setError(null);
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     try{
-      const res = await fetch("/api/ventes", { signal: controller.signal });
+      const url = showAllSales
+        ? "/api/ventes"
+        : `/api/ventes?month=${selectedMonth}&year=${selectedYear}`;
+      const res = await fetch(url, { signal: controller.signal });
       if(!res.ok) throw new Error(res.statusText);
       const data = await res.json();
       setSales(processSalesData(data.data || []));
@@ -408,7 +433,7 @@ const AllSales = () => {
     } finally{
       setLoading(false);
     }
-  },[]);
+  },[showAllSales, selectedMonth, selectedYear]);
 
   useEffect(()=>{
     fetchSales();
@@ -492,8 +517,9 @@ const AllSales = () => {
         method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(modalSale)
       });
       if(!res.ok) throw new Error(await res.text());
+      setSales(prev => prev.map(s => s._id === modalSale._id ? { ...s, payments: modalSale.payments } : s));
       toast.success("Sauvegardé !");
-      setModalSale(null); fetchSales();
+      setModalSale(null);
     }catch(err){ toast.error(err.message);}
   };
 
@@ -522,8 +548,8 @@ const AllSales = () => {
       <SalesTable
         sales={paginatedSales} showAllSales={showAllSales}
         onDoubleClick={setModalSale}
-        onEdit={s=>window.location.assign(`/sales/edit/${s._id}`)}
-        onDetails={s=>window.location.assign(`/file/details/${s._id}`)}
+        onEdit={s=>router.push(`/sales/edit/${s._id}`)}
+        onDetails={s=>router.push(`/file/details/${s._id}`)}
         onCopy={handleCopySale} onHide={handleHideSale}
       />
 

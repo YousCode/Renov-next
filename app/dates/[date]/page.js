@@ -53,20 +53,18 @@ function generateUniqueBCNumber(existingBCNumbers) {
 
 // 1.2) Hook personnalisé pour gérer l'état global des ventes
 //--------------------------------------------------------------------
-function useSales() {
+function useSales(dateFilter) {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Pour éviter de rappeler fetchSalesData en boucle, on déclare une fonction
   const fetchSalesData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/ventes", { credentials: "include" });
-      if (!response.ok) {
-        throw new Error("Failed to fetch sales data");
-      }
+      const url = dateFilter ? `/api/ventes?date=${dateFilter}` : "/api/ventes";
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch sales data");
       const data = await response.json();
       setSales(data.data || []);
     } catch (err) {
@@ -74,18 +72,69 @@ function useSales() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dateFilter]);
 
   useEffect(() => {
     fetchSalesData();
   }, [fetchSalesData]);
 
-  // Une fonction pour forcer le rafraîchissement externe si besoin (après ajout, suppr, etc.)
-  const refreshSales = () => {
-    fetchSalesData();
-  };
+  const refreshSales = () => fetchSalesData();
 
   return { sales, loading, error, setSales, refreshSales };
+}
+
+// 1.3) Skeleton loader pour la page planning
+//--------------------------------------------------------------------
+const COLS = ["Heure","Nom","Tel","Ville","Vtc","Travaux","Résultat","Actions"];
+const COL_WIDTHS = [50, 120, 80, 80, 60, 100, 70, 60];
+
+function PlanningLoader({ formattedDate, router }) {
+  return (
+    <div className="p-6 font-garamond">
+      <div className="flex justify-between items-center mb-4">
+        <button
+          onClick={() => router.back()}
+          className="px-4 py-2 bg-gray-700 text-white rounded-lg"
+        >
+          Retour
+        </button>
+        <h2 className="text-2xl text-black font-bold">{formattedDate}</h2>
+      </div>
+
+      <div className="overflow-x-auto mb-4">
+        <table className="min-w-full border border-black" style={{ backgroundColor: "#FFFACD" }}>
+          <thead style={{ backgroundColor: "#FFFACD" }}>
+            <tr>
+              {COLS.map(h => (
+                <th key={h} className="border border-black px-2 py-1 text-left text-xs font-medium uppercase tracking-wider">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody style={{ backgroundColor: "#FFFACD" }} className="divide-y divide-gray-200">
+            {Array.from({ length: 15 }).map((_, i) => (
+              <tr key={i}>
+                {COL_WIDTHS.map((w, j) => (
+                  <td key={j} className="border border-black px-2 py-1">
+                    <div
+                      className="h-4 rounded animate-pulse"
+                      style={{
+                        width: w,
+                        backgroundColor: "#e8e0a0",
+                        opacity: Math.max(0.2, 1 - i * 0.05),
+                        animationDelay: `${i * 40 + j * 15}ms`,
+                      }}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 // 2) ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -460,8 +509,8 @@ export default function DateDetails() {
   const { date } = useParams();
   const router = useRouter();
 
-  // Récupère les ventes (sales) via le hook
-  const { sales, loading, error, setSales, refreshSales } = useSales();
+  // Récupère les ventes (sales) via le hook — filtré par date côté serveur
+  const { sales, loading, error, setSales } = useSales(date);
 
   // Gère la recherche de clients
   const [isSearching, setIsSearching] = useState(false);
@@ -758,7 +807,7 @@ export default function DateDetails() {
         </div>
 
         {loading ? (
-          <p>Loading...</p>
+          <PlanningLoader formattedDate={formattedDate} router={router} />
         ) : error ? (
           <p>{error}</p>
         ) : (
