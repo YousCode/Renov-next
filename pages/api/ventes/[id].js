@@ -1,54 +1,50 @@
-import connectToDatabase from '../../../lib/mongodb';
-import Vente from '../../../models/ventes';
-import passport from 'passport';
+import connectToDatabase from "../../../lib/mongodb";
+import Vente from "../../../models/ventes";
 
 export default async function handler(req, res) {
   await connectToDatabase();
 
-  if (req.method === 'GET') {
-    await getVenteById(req, res);
-  } else if (req.method === 'PUT') {
-    await updateVente(req, res);
-  } else if (req.method === 'DELETE') {
-    await deleteVente(req, res);
-  } else {
-    res.setHeader('Allow', ['GET', 'PUT', 'DELETE']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
+  switch (req.method) {
+    case "GET":    return getVenteById(req, res);
+    case "PUT":    return updateVente(req, res);
+    case "DELETE": return deleteVente(req, res);
+    default:
+      res.setHeader("Allow", ["GET", "PUT", "DELETE"]);
+      return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 }
 
-const getVenteById = async (req, res) => {
+async function getVenteById(req, res) {
   try {
-    const vente = await Vente.findById(req.query.id);
-    if (!vente) {
-      return res.status(404).json({ success: false, message: 'Vente non trouvée' });
-    }
-    res.status(200).json({ success: true, data: vente });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    const vente = await Vente.findById(req.query.id).lean().exec();
+    if (!vente) return res.status(404).json({ success: false, message: "Vente non trouvée" });
+    res.setHeader("Cache-Control", "private, max-age=30");
+    return res.status(200).json({ success: true, data: vente });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
   }
-};
+}
 
-const updateVente = async (req, res) => {
+async function updateVente(req, res) {
   try {
-    const vente = await Vente.findByIdAndUpdate(req.query.id, req.body, { new: true });
-    if (!vente) {
-      return res.status(404).json({ success: false, message: 'Vente non trouvée' });
-    }
-    res.status(200).json({ success: true, message: 'Vente mise à jour avec succès', data: vente });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    const vente = await Vente.findByIdAndUpdate(
+      req.query.id,
+      { $set: req.body, updatedAt: new Date() },
+      { new: true, runValidators: true, lean: true }
+    ).exec();
+    if (!vente) return res.status(404).json({ success: false, message: "Vente non trouvée" });
+    return res.status(200).json({ success: true, data: vente });
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message });
   }
-};
+}
 
-const deleteVente = async (req, res) => {
+async function deleteVente(req, res) {
   try {
-    const vente = await Vente.findByIdAndDelete(req.query.id);
-    if (!vente) {
-      return res.status(404).json({ success: false, message: 'Vente non trouvée' });
-    }
-    res.status(200).json({ success: true, message: 'Vente supprimée avec succès' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    const vente = await Vente.findByIdAndDelete(req.query.id).lean().exec();
+    if (!vente) return res.status(404).json({ success: false, message: "Vente non trouvée" });
+    return res.status(200).json({ success: true, message: "Vente supprimée" });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
   }
-};
+}

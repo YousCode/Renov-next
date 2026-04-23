@@ -4,354 +4,196 @@ import React, { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import {
-  Page,
-  Text,
-  View,
-  Document,
-  StyleSheet,
-  Image,
-  Font,
+  Page, Text, View, Document, StyleSheet, Image, Font,
 } from "@react-pdf/renderer";
 
 const PDFViewer = dynamic(
-  () => import("@react-pdf/renderer").then((mod) => mod.PDFViewer),
+  () => import("@react-pdf/renderer").then(m => m.PDFViewer),
   { ssr: false }
 );
 
-Font.register({
-  family: "Roboto",
-  fonts: [
-    { src: "../../Roboto-Regular.ttf" },
-    { src: "../../Roboto-Bold.ttf", fontWeight: "bold" },
-  ],
-});
-
-// Fonction pour formater les dates au format français
-const formatDateFR = (dateString) => {
-  if (!dateString) return "";
-  const date = new Date(dateString);
-  return date.toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
+// ─────────────────────────────────────────────────────────────
+// Enregistrement des polices (lazy, côté client uniquement)
+// ─────────────────────────────────────────────────────────────
+let fontsReady = false;
+function ensureFonts() {
+  if (fontsReady || typeof window === "undefined") return;
+  const base = window.location.origin;
+  Font.register({
+    family: "Roboto",
+    fonts: [
+      { src: `${base}/Roboto-Regular.ttf` },
+      { src: `${base}/Roboto-Bold.ttf`, fontWeight: "bold" },
+    ],
   });
+  fontsReady = true;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+const fmtDate = (d) => {
+  if (!d) return "";
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? "" : dt.toLocaleDateString("fr-FR", { day:"2-digit", month:"2-digit", year:"numeric" });
 };
 
-const MyDocument = ({ sale }) => (
-  <Document>
-    <Page style={styles.page}>
-      {/* Logo et en-tête */}
-      <View style={styles.logoHeaderContainer}>
-        <Image style={styles.logo} src="../../logorenov.png" />
-        <View style={styles.logoTextContainer}>
-          <Text style={styles.logoText}>Facture</Text>
-          <Text style={styles.logoText}>Poseur</Text>
-        </View>
-      </View>
-
-      {/* Contenu principal */}
-      <View style={styles.mainContent}>
-        {/* Titre */}
-        <View style={styles.headerContainer}>
-          <Text style={styles.header}>FICHE CLIENT</Text>
-        </View>
-
-        {/* Informations Client */}
-        <View style={styles.clientInfo}>
-          <Text style={styles.green}>
-            Date de vente: {formatDateFR(sale["DATE DE VENTE"])}
-          </Text>
-          <Text style={styles.green}>
-            Bon de commande N°: {sale["NUMERO BC"] || ""}
-          </Text>
-          <Text style={styles.text}>Civilité: {sale.CIVILITE || ""}</Text>
-          <Text style={styles.textB}>Nom: {sale["NOM DU CLIENT"] || ""}</Text>
-          <Text style={styles.textB}>Prénom: {sale.prenom || ""}</Text>
-          <Text style={styles.text}>
-            Adresse: {sale["ADRESSE DU CLIENT"] || ""}, {sale.CP || ""}
-          </Text>
-          <Text style={styles.text}>Ville: {sale.VILLE || ""}</Text>
-          <Text style={styles.text}>
-            Bâtiment, Code, Étage: {sale["CODE INTERP etage"] || ""}
-          </Text>
-          <Text style={styles.text}>Téléphone: {sale.TELEPHONE || ""}</Text>
-        </View>
-
-        {/* Nature des travaux */}
-        <View style={styles.section}>
-          <Text style={styles.boldText}>
-            Nature des travaux: {sale.DESIGNATION || ""}
-          </Text>
-        </View>
-
-        {/* Délai d'intervention */}
-        <View style={styles.section}>
-          <Text style={styles.boldText}>
-            Délai d&apos;intervention:{" "}
-            {formatDateFR(sale["PREVISION CHANTIER"])}
-          </Text>
-        </View>
-
-        {/* Dates supplémentaires */}
-        <View style={styles.row}>
-          <View style={styles.section}>
-            <Text style={styles.boldText}>
-              Date du rendez-vous de PIT: {formatDateFR(sale["DATE PIT"])}
-            </Text>
-          </View>
-          <View style={styles.section}>
-            <Text style={styles.boldText}>
-              Date des travaux: {formatDateFR(sale["DATE TRAVAUX"])}
-            </Text>
-          </View>
-        </View>
-
-        {/* Tableau des travaux */}
-        <View style={styles.section}>
-          <View style={styles.table}>
-            <View style={styles.tableRow}>
-              <View style={[styles.tableColHeader, styles.tableColDesignation]}>
-                <Text style={styles.tableCellHeader}>
-                  Désignation des travaux:
-                </Text>
-              </View>
-              <View style={[styles.tableColHeader, styles.tableColQte]}>
-                <Text style={styles.tableCellHeader}>Qté</Text>
-              </View>
-              <View
-                style={[
-                  styles.tableColHeader,
-                  styles.tableColSurfaceEmplacement,
-                ]}
-              >
-                <Text style={styles.tableCellHeader}>Surface</Text>
-              </View>
-              <View
-                style={[
-                  styles.tableColHeader,
-                  styles.tableColSurfaceEmplacement,
-                ]}
-              >
-                <Text style={styles.tableCellHeader}>Emplacement</Text>
-              </View>
-            </View>
-            <View style={styles.tableRow}>
-              <View style={[styles.tableCol, styles.tableColDesignation]}>
-                <Text style={styles.tableCell}>{sale.DESIGNATION || ""}</Text>
-              </View>
-              <View style={[styles.tableCol, styles.tableColQte]}>
-                <Text style={styles.tableCell}>{sale.qte || ""}</Text>
-              </View>
-              <View
-                style={[styles.tableCol, styles.tableColSurfaceEmplacement]}
-              >
-                <Text style={styles.tableCell}>{sale.SURFACE || ""}</Text>
-              </View>
-              <View
-                style={[styles.tableCol, styles.tableColSurfaceEmplacement]}
-              >
-                <Text style={styles.tableCell}>{sale.EMPLACEMENT || ""}</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Bannière et informations du vendeur */}
-        <View style={styles.bannerContainer}>
-          <Image style={styles.bannerImage} src="../../important.jpg" />
-        </View>
-        <View style={styles.vendeurInfo}>
-          <Text style={styles.VENDEURText}>VENDEUR: {sale.VENDEUR || ""}</Text>
-        </View>
-      </View>
-    </Page>
-  </Document>
-);
-
-const styles = StyleSheet.create({
-  page: {
-    backgroundColor: "#ffffff",
-  },
-  logoHeaderContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0, // Ensure it stretches across the top
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between", // Space between the image and the text container
-    padding: 10,
-  },
-  logo: {
-    width: 120,
-    height: 120,
-  },
-  logoTextContainer: {
-    flexDirection: "column",
-    justifyContent: "space-between", // Space between the two texts
-    height: 80, // Match the height of the logo
-    paddingRight: 120,
-  },
-  logoText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    fontFamily: "Roboto",
-  },
-  mainContent: {
-    marginTop: 110, // Adjust to avoid overlapping with the logo header
-    padding: 30,
-  },
-  headerContainer: {
-    flexDirection: "row",
-    justifyContent: "left",
-    alignItems: "center",
-    marginBottom: 0,
-  },
-  green: {
-    fontSize: 14,
-    color: "#217626",
-    fontWeight: "bold",
-    fontFamily: "Roboto",
-    paddingLeft: 5,
-  },
-  header: {
-    fontFamily: "Roboto",
-    fontSize: 22,
-    fontWeight: "bold",
-    textAlign: "left",
-    flex: 1,
-    backgroundColor: "#cccfcf",
-    paddingLeft: 5,
-  },
-  text: {
-    fontSize: 14,
-    marginBottom: 5,
-    paddingLeft: 5,
-    fontFamily: "Roboto",
-  },
-  textB: {
-    fontSize: 14,
-    marginBottom: 5,
-    fontFamily: "Roboto",
-    fontWeight: "bold",
-    paddingLeft: 5,
-  },
-  boldText: {
-    marginBottom: 5,
-    paddingLeft: 5,
-    fontFamily: "Roboto",
-    fontWeight: "bold",
-    fontSize: 20,
-    textAlign: "left",
-    backgroundColor: "#cccfcf",
-  },
-  clientInfo: {
-    paddingBottom: 0,
-  },
-  section: {
-    marginBottom: 10,
-  },
-  travauxInfo: {
-    marginBottom: 20,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#cccccc",
-  },
-  VENDEURText: {
-    fontSize: 12,
-    fontFamily: "Roboto",
-    fontWeight: "bold",
-  },
-  table: {
-    display: "table",
-    width: "auto",
-    borderStyle: "solid",
-    borderWidth: 1,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-  },
-  tableRow: {
-    flexDirection: "row",
-  },
-  tableColHeader: {
-    borderStyle: "solid",
-    borderWidth: 1,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-    backgroundColor: "#cccfcf",
-    padding: 5,
-    justifyContent: "flex-end",
-  },
-  tableCol: {
-    borderStyle: "solid",
-    borderWidth: 1,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-    padding: 5,
-    height: 50,
-    justifyContent: "flex-end",
-  },
-  tableCellHeader: {
-    fontSize: 12,
-    fontFamily: "Roboto",
-    fontWeight: "bold",
-    textAlign: "center",
-    verticalAlign: "bottom",
-  },
-  tableCell: {
-    fontSize: 12,
-    textAlign: "left",
-    verticalAlign: "bottom",
-  },
-  tableColDesignation: {
-    width: "45%",
-  },
-  tableColQte: {
-    width: "10%",
-  },
-  tableColSurfaceEmplacement: {
-    width: "22.5%",
-  },
-  bannerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#000000",
-    width: "100%",
-    height: 90,
-    padding: 5,
-  },
-  bannerImage: {
-    height: 80,
-    width: 90,
-    // marginRight: 10,
-  },
-});
-
-const Test = () => {
-  const [sale, setSale] = useState(null);
-  const { id } = useParams();
-
-  useEffect(() => {
-    if (id) {
-      const fetchSale = async () => {
-        const response = await fetch(`/api/ventes/${id}`);
-        const data = await response.json();
-        setSale(data.data);
-      };
-      fetchSale();
-    }
-  }, [id]);
-
-  if (!sale) {
-    return <p>Chargement des données...</p>;
-  }
+// ─────────────────────────────────────────────────────────────
+// Document PDF
+// ─────────────────────────────────────────────────────────────
+export const MyDocument = ({ sale }) => {
+  ensureFonts();
+  const base = typeof window !== "undefined" ? window.location.origin : "";
 
   return (
-    <main className="flex min-h-screen flex-col items-center gap-4 p-4">
-      <p>Fiche de Pose</p>
-      <div className="w-full h-[1650px] flex items-center justify-center">
-        <PDFViewer style={{ width: "100%", height: "100%" }}>
+    <Document>
+      <Page style={s.page}>
+
+        {/* ── En-tête ── */}
+        <View style={s.header}>
+          <Image style={s.logo} src={`${base}/logorenov.png`} />
+          <View style={s.headerText}>
+            <Text style={s.headerLabel}>Facture</Text>
+            <Text style={s.headerLabel}>Poseur</Text>
+          </View>
+        </View>
+
+        {/* ── Corps ── */}
+        <View style={s.body}>
+
+          {/* Titre */}
+          <View style={s.titleBar}>
+            <Text style={s.title}>FICHE CLIENT</Text>
+          </View>
+
+          {/* Infos client */}
+          <View style={s.clientBlock}>
+            <Text style={s.green}>Date de vente : {fmtDate(sale["DATE DE VENTE"])}</Text>
+            <Text style={s.green}>Bon de commande N° : {sale["NUMERO BC"] || ""}</Text>
+            <Text style={s.line}>Civilité : {sale["CIVILITE"] || ""}</Text>
+            <Text style={s.lineBold}>Nom : {sale["NOM DU CLIENT"] || ""}</Text>
+            <Text style={s.lineBold}>Prénom : {sale["prenom"] || ""}</Text>
+            <Text style={s.line}>Adresse : {sale["ADRESSE DU CLIENT"] || ""}{sale["CP"] ? `, ${sale["CP"]}` : ""}</Text>
+            <Text style={s.line}>Ville : {sale["VILLE"] || ""}</Text>
+            <Text style={s.line}>Bâtiment / Code / Étage : {sale["CODE INTERP etage"] || ""}</Text>
+            <Text style={s.line}>Téléphone : {sale["TELEPHONE"] || ""}</Text>
+          </View>
+
+          {/* Nature des travaux */}
+          <View style={s.sectionBar}>
+            <Text style={s.sectionTitle}>Nature des travaux : {sale["DESIGNATION"] || ""}</Text>
+          </View>
+
+          {/* Délai */}
+          <View style={s.sectionBar}>
+            <Text style={s.sectionTitle}>Délai d'intervention : {fmtDate(sale["PREVISION CHANTIER"])}</Text>
+          </View>
+
+          {/* Dates PIT / Travaux */}
+          <View style={s.row}>
+            <View style={[s.sectionBar, { flex: 1, marginRight: 4 }]}>
+              <Text style={s.sectionTitle}>Date RDV PIT : {fmtDate(sale["DATE PIT"])}</Text>
+            </View>
+            <View style={[s.sectionBar, { flex: 1, marginLeft: 4 }]}>
+              <Text style={s.sectionTitle}>Date des travaux : {fmtDate(sale["DATE TRAVAUX"])}</Text>
+            </View>
+          </View>
+
+          {/* Tableau travaux */}
+          <View style={s.table}>
+            <View style={s.tableHead}>
+              <Text style={[s.cell, s.cellWide]}>Désignation des travaux :</Text>
+              <Text style={s.cell}>Qté</Text>
+              <Text style={s.cell}>Surface</Text>
+              <Text style={s.cell}>Emplacement</Text>
+            </View>
+            <View style={s.tableRow}>
+              <Text style={[s.cellData, s.cellWide]}>{sale["DESIGNATION"] || ""}</Text>
+              <Text style={s.cellData}>{sale["qte"] || ""}</Text>
+              <Text style={s.cellData}>{sale["SURFACE"] || ""}</Text>
+              <Text style={s.cellData}>{sale["EMPLACEMENT"] || ""}</Text>
+            </View>
+          </View>
+
+          {/* Bannière importante */}
+          <View style={s.banner}>
+            <Image style={s.bannerImg} src={`${base}/important.jpg`} />
+          </View>
+
+          {/* Vendeur */}
+          <View style={s.vendeurRow}>
+            <Text style={s.vendeur}>VENDEUR : {sale["VENDEUR"] || ""}</Text>
+          </View>
+        </View>
+      </Page>
+    </Document>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  page:        { backgroundColor: "#fff" },
+  header:      { position:"absolute", top:0, left:0, right:0, flexDirection:"row", alignItems:"center", justifyContent:"space-between", padding:10 },
+  logo:        { width:110, height:110 },
+  headerText:  { flexDirection:"column", justifyContent:"space-between", height:70, paddingRight:110 },
+  headerLabel: { fontSize:14, fontWeight:"bold", fontFamily:"Roboto" },
+
+  body:        { marginTop:115, paddingHorizontal:30, paddingBottom:20 },
+
+  titleBar:    { backgroundColor:"#cccfcf", marginBottom:6 },
+  title:       { fontFamily:"Roboto", fontSize:22, fontWeight:"bold", paddingLeft:6, paddingVertical:2 },
+
+  clientBlock: { marginBottom:8 },
+  green:       { fontSize:13, color:"#217626", fontWeight:"bold", fontFamily:"Roboto", paddingLeft:5, marginBottom:2 },
+  line:        { fontSize:13, fontFamily:"Roboto", paddingLeft:5, marginBottom:2 },
+  lineBold:    { fontSize:13, fontFamily:"Roboto", fontWeight:"bold", paddingLeft:5, marginBottom:2 },
+
+  sectionBar:  { backgroundColor:"#cccfcf", marginBottom:8, paddingVertical:3, paddingLeft:5 },
+  sectionTitle:{ fontFamily:"Roboto", fontWeight:"bold", fontSize:16 },
+
+  row:         { flexDirection:"row", marginBottom:8 },
+
+  table:       { borderWidth:1, borderColor:"#ccc", marginBottom:10 },
+  tableHead:   { flexDirection:"row", backgroundColor:"#cccfcf", borderBottomWidth:1, borderBottomColor:"#ccc" },
+  tableRow:    { flexDirection:"row" },
+  cell:        { flex:1, fontSize:11, fontFamily:"Roboto", fontWeight:"bold", textAlign:"center", padding:5, borderRightWidth:1, borderRightColor:"#ccc" },
+  cellWide:    { flex:2.5 },
+  cellData:    { flex:1, fontSize:11, fontFamily:"Roboto", padding:5, height:50, borderRightWidth:1, borderRightColor:"#ccc" },
+
+  banner:      { borderWidth:1, borderColor:"#000", height:90, marginBottom:6, overflow:"hidden" },
+  bannerImg:   { width:90, height:80, margin:5 },
+
+  vendeurRow:  { paddingLeft:5 },
+  vendeur:     { fontSize:12, fontFamily:"Roboto", fontWeight:"bold" },
+});
+
+// ─────────────────────────────────────────────────────────────
+// Composant standalone (page /file/details/[id])
+// ─────────────────────────────────────────────────────────────
+const SaleDetails = () => {
+  const { id } = useParams();
+  const [sale, setSale] = useState(null);
+
+  useEffect(() => {
+    if (!id) return;
+    fetch(`/api/ventes/${id}`)
+      .then(r => r.json())
+      .then(d => setSale(d.data));
+  }, [id]);
+
+  if (!sale) return (
+    <main className="flex min-h-screen items-center justify-center bg-gray-900">
+      <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"/>
+    </main>
+  );
+
+  return (
+    <main className="flex min-h-screen flex-col items-center gap-4 p-4 bg-gray-900">
+      <p className="text-white font-semibold">Fiche de Pose</p>
+      <div className="w-full h-[1650px]">
+        <PDFViewer style={{ inlineSize:"100%", blockSize:"100%" }}>
           <MyDocument sale={sale} />
         </PDFViewer>
       </div>
@@ -359,4 +201,4 @@ const Test = () => {
   );
 };
 
-export default Test;
+export default SaleDetails;

@@ -23,8 +23,13 @@ const venteSchema = new mongoose.Schema({
   "ETAT": { type: String },
   "PREVISION CHANTIER": { type: Date }, 
   "OBSERVATION": { type: String },
-  "Barème COM": { type: Number }, 
-  "Montant commissions en €": { type: Number }, 
+  "Barème COM": { type: Number },
+  "Montant commissions en €": { type: Number },
+  "DATE PIT": { type: Date },
+  "DATE TRAVAUX": { type: Date },
+  "qte": { type: String },
+  "SURFACE": { type: String },
+  "EMPLACEMENT": { type: String },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
