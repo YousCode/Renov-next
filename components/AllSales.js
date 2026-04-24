@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEdit, faFile, faTrash, faCheck, faSearch, faChevronLeft, faDownload } from "@fortawesome/free-solid-svg-icons";
+import { faEdit, faFile, faTrash, faCheck, faSearch, faChevronLeft, faDownload, faCopy } from "@fortawesome/free-solid-svg-icons";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -221,14 +221,30 @@ const AllSales = () => {
   }, [router]);
 
   // CSV
+  const EXPORT_COLS = ["DATE DE VENTE","NOM DU CLIENT","prenom","ADRESSE DU CLIENT","VILLE","CP","TELEPHONE","VENDEUR","NUMERO BC","DESIGNATION","MONTANT TTC","TAUX TVA","MONTANT HT","ETAT","PREVISION CHANTIER"];
+
   const downloadCSV = useCallback(() => {
     if (!filtered.length) return;
-    const cols = ["DATE DE VENTE","NOM DU CLIENT","prenom","ADRESSE DU CLIENT","VILLE","CP","TELEPHONE","VENDEUR","NUMERO BC","DESIGNATION","MONTANT TTC","TAUX TVA","MONTANT HT","ETAT","PREVISION CHANTIER"];
-    const rows = [cols.join(";"), ...filtered.map(s => cols.map(c => s[c]||"").join(";"))];
+    const rows = [EXPORT_COLS.join(";"), ...filtered.map(s => EXPORT_COLS.map(c => s[c]||"").join(";"))];
     const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
     a.download = `ventes-${MONTHS[month]}-${year}.csv`; a.click();
   }, [filtered, month, year]);
+
+  // Copie une ligne au format TSV (collable directement dans Excel)
+  const copyRow = useCallback(async (sale) => {
+    const fmtCell = (v) => {
+      const s = String(v ?? "");
+      return s.replace(/\t/g, " ").replace(/\r?\n/g, " ");
+    };
+    const tsv = EXPORT_COLS.map(c => fmtCell(sale[c])).join("\t");
+    try {
+      await navigator.clipboard.writeText(tsv);
+      toast.success("Ligne copiée — collez dans Excel");
+    } catch {
+      toast.error("Copie impossible");
+    }
+  }, []);
 
   if (loading) return <TableSkeleton />;
   if (error) return (
@@ -413,6 +429,11 @@ const AllSales = () => {
                           <button onClick={() => router.push(`/sales/edit/${sale._id}`)}
                             className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-blue-600 rounded-lg transition-colors" title="Modifier">
                             <FontAwesomeIcon icon={faEdit} className="text-[10px]"/>
+                          </button>
+
+                          <button onClick={() => copyRow(sale)}
+                            className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-indigo-600 rounded-lg transition-colors" title="Copier la ligne (Excel)">
+                            <FontAwesomeIcon icon={faCopy} className="text-[10px]"/>
                           </button>
 
                           {confirmed ? (
