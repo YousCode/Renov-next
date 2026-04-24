@@ -1,499 +1,559 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+// --------------------------------------------
+// AllSalesImproved.jsx – version sans la colonne « MONTANT »
+// --------------------------------------------
+
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import { useRouter } from "next/navigation";
+import Tesseract from "tesseract.js";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEdit, faFile, faTrash, faCheck, faSearch, faChevronLeft, faDownload, faCopy } from "@fortawesome/free-solid-svg-icons";
+import {
+  faEdit,
+  faFile,
+  faTrash,
+  faCopy,
+  faDownload,
+  faTimes,
+} from "@fortawesome/free-solid-svg-icons";
+import Confetti from "react-confetti";
+import useWindowSize from "react-use/lib/useWindowSize";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import clsx from "clsx";
 
-// ─────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────
-const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
-const TVA_OPTIONS = ["0%","5.5%","10%","20%"];
+// -----------------------------------------------
+// Constantes & Helpers
+// -----------------------------------------------
+const ITEMS_PER_PAGE = 500;
 
-const norm   = (s) => s ? s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase() : "";
-const fmtD   = (d) => { if (!d) return ""; const dt = new Date(d); return isNaN(dt) ? "" : dt.toLocaleDateString("fr-FR"); };
-const fmtCur = (v) => { const n = parseFloat(v); return (!n || isNaN(n)) ? "—" : new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n); };
-const toISO  = (d) => { if (!d) return ""; const dt = new Date(d); return isNaN(dt.getTime()) ? "" : dt.toISOString().split("T")[0]; };
-const parseTVA = (r) => { const n = Number(String(r??"").replace("%","").replace(",",".").trim()); return Number.isFinite(n) ? Math.max(0,Math.min(20,n)) : 5.5; };
-const hasMontant = (s) => parseFloat(s["MONTANT TTC"]) > 0;
-const isAnnule   = (s) => norm(s["ETAT"]||"") === "annule";
+const months = [
+  "Janvier","Février","Mars","Avril","Mai","Juin",
+  "Juillet","Août","Septembre","Octobre","Novembre","Décembre",
+];
 
-// ─────────────────────────────────────────────────────────────
-// Skeleton
-// ─────────────────────────────────────────────────────────────
-const TableSkeleton = () => (
-  <div className="min-h-[calc(100vh-64px)] bg-gray-900 p-4 animate-pulse">
-    <div className="max-w-full mx-auto space-y-4">
-      <div className="flex gap-2 flex-wrap">
-        {[60,50,55,55,45,50,55,50,75,65,65,55].map((w,i) => (
-          <div key={i} className="h-8 rounded-lg bg-gray-800" style={{inlineSize:w}}/>
-        ))}
-      </div>
-      <div className="bg-gray-800 rounded-xl border border-gray-700/50 overflow-hidden">
-        <div className="h-10 bg-gray-700/50"/>
-        {[...Array(8)].map((_,i) => (
-          <div key={i} className="flex gap-4 px-4 py-3 border-t border-gray-700/30">
-            {[60,100,120,80,80,90,60,100,80,70].map((w,j) => (
-              <div key={j} className="h-4 rounded bg-gray-700" style={{inlineSize:w, flexShrink:0}}/>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
+const normalizeString = (str) =>
+  str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  return isNaN(date.getTime()) ? "" : date.toLocaleDateString("fr-FR");
+};
+
+const formatNumber = (value) => {
+  const number = parseFloat(value);
+  if (isNaN(number)) return value || "";
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(number);
+};
+
+function calculateCommission(sale) {
+  const caHT = parseFloat(sale["MONTANT HT"]) || 0;
+  const percent = { T1: 0.2, T2: 0.17, T3: 0.15, T4: 0.12, T5: 0.1, T6: 0.06 }[sale["BAREME COM"]] ?? 0.1;
+  return (caHT * percent).toFixed(2);
+}
+
+function getBaremeBgColor(b) {
+  return { T1:"bg-green-300",T2:"bg-blue-300",T3:"bg-purple-300",T4:"bg-yellow-300",T6:"bg-red-300" }[b] || "";
+}
+
+const parseTVA = (raw) => {
+  const s = String(raw ?? "").replace("%","").replace(",",".").trim();
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  // borne douce : 0–20
+  return Math.max(0, Math.min(20, n));
+};
+
+// -------------------------------------------------
+// Nettoyage / déduplication
+// -------------------------------------------------
+function processSalesData(salesData) {
+  const unique = [], seen = new Set();
+  salesData.forEach((sale) => {
+    const id = `${normalizeString(sale["NOM DU CLIENT"])}|${formatDate(sale["DATE DE VENTE"])}|${sale["MONTANT TTC"]}|${sale["VENDEUR"]}`;
+    if (seen.has(id)) return; seen.add(id);
+
+    let ht = parseFloat(sale["MONTANT HT"]);
+    let ttc = parseFloat(sale["MONTANT TTC"]);
+    let taux = parseTVA(sale["TAUX TVA"]);
+
+    if (taux !== null) {
+      if (isNaN(ttc) && !isNaN(ht)) ttc = ht * (1 + taux / 100);
+      if (isNaN(ht) && !isNaN(ttc)) ht = ttc / (1 + taux / 100);
+    }
+
+    sale["MONTANT HT"] = (ht ?? 0).toFixed(2);
+    sale["MONTANT TTC"] = (ttc ?? 0).toFixed(2);
+    sale["TAUX TVA"]      = taux !== null ? `${taux}%` : "";
+    sale["BAREME COM"]    = sale["BAREME COM"] || "T5";
+    sale["MONTANT COMMISSIONS"] = calculateCommission(sale);
+
+    unique.push(sale);
+  });
+  return unique;
+}
+
+// ------------------------------------------------------------------
+// Loader
+// ------------------------------------------------------------------
+const Loader = () => (
+  <div className="flex items-center justify-center py-8">
+    <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600" />
   </div>
 );
 
-// ─────────────────────────────────────────────────────────────
-// Modal confirmation
-// ─────────────────────────────────────────────────────────────
-const ConfirmModal = ({ sale, onClose, onSave }) => {
-  const [form, setForm] = useState({
-    "MONTANT TTC":        parseFloat(sale["MONTANT TTC"]) || "",
-    "TAUX TVA":           sale["TAUX TVA"] || "5.5%",
-    "PREVISION CHANTIER": toISO(sale["PREVISION CHANTIER"]),
-    "DATE PIT":           toISO(sale["DATE PIT"]),
-    "DATE TRAVAUX":       toISO(sale["DATE TRAVAUX"]),
-    "DESIGNATION":        sale["DESIGNATION"] || "",
-    "qte":                sale["qte"] || "",
-    "SURFACE":            sale["SURFACE"] || "",
-    "EMPLACEMENT":        sale["EMPLACEMENT"] || "",
-  });
-  const [saving, setSaving] = useState(false);
-  const tva = parseTVA(form["TAUX TVA"]);
-  const ht  = form["MONTANT TTC"] ? (parseFloat(form["MONTANT TTC"]) / (1 + tva / 100)) : 0;
-  const set = (k,v) => setForm(f => ({...f,[k]:v}));
+// ------------------------------------------------------------------
+// Barre de filtres & contrôles
+// ------------------------------------------------------------------
+const FiltersBar = ({
+  showAllSales,toggleShowAll,
+  searchTerm,onSearchChange,
+  sortField,setSortField,
+  sortOrder,setSortOrder,
+  copyCSV,downloadCSV,
+  selectedMonth,setSelectedMonth,
+  selectedYear,setSelectedYear,
+}) => (
+  <div className="flex flex-col items-center w-full mb-2 text-[10px]">
+    <div className="flex flex-wrap items-center justify-center gap-1 mb-1">
+      <button type="button" onClick={toggleShowAll} className="px-2 py-1 bg-blue-500 text-white rounded">
+        {showAllSales ? "Afficher mensuelles" : "Afficher toutes"}
+      </button>
+      <input
+        value={searchTerm} onChange={onSearchChange}
+        placeholder="Rechercher"
+        className="w-40 p-1 border border-gray-300 rounded"
+        aria-label="Rechercher"
+      />
+      <select value={sortField} onChange={e=>setSortField(e.target.value)} className="p-1 border rounded">
+        {["DATE DE VENTE","NOM DU CLIENT","MONTANT HT","MONTANT TTC","VENDEUR","DESIGNATION","PREVISION CHANTIER"]
+          .map(f=>(<option key={f} value={f}>{f}</option>))}
+      </select>
+      <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)} className="p-1 border rounded">
+        <option value="asc">Asc</option><option value="desc">Desc</option>
+      </select>
+      <button type="button" onClick={copyCSV} className="px-2 py-1 bg-purple-500 text-white rounded" title="Copier CSV">
+        <FontAwesomeIcon icon={faCopy}/>
+      </button>
+      <button type="button" onClick={downloadCSV} className="px-2 py-1 bg-green-500 text-white rounded" title="Télécharger CSV">
+        <FontAwesomeIcon icon={faDownload}/>
+      </button>
+    </div>
 
-  const handleSave = async () => {
-    if (!form["MONTANT TTC"]) return toast.error("Montant TTC requis");
-    setSaving(true);
-    const ok = await onSave(sale._id, { ...sale, ...form, "MONTANT HT": ht.toFixed(2), "ETAT": "DV" });
-    if (ok) onClose();
-    setSaving(false);
+    {!showAllSales && (
+      <div className="flex gap-1 flex-wrap justify-center">
+        {months.map((m,i)=>(
+          <button type="button" key={m} onClick={()=>setSelectedMonth(i)}
+            className={clsx("px-1 py-1 rounded whitespace-nowrap",
+              selectedMonth===i?"bg-blue-500 text-white":"bg-gray-600 text-white")}>
+            {m}
+          </button>
+        ))}
+        <select value={selectedYear} onChange={e=>setSelectedYear(+e.target.value)} className="p-1 bg-gray-600 text-white rounded">
+          {Array.from({length:10},(_,k)=>new Date().getFullYear()-k).map(y=>(
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+      </div>
+    )}
+  </div>
+);
+
+// ------------------------------------------------------------------
+// Tableau des ventes
+// ------------------------------------------------------------------
+const SalesTable = ({
+  sales,showAllSales,onDoubleClick,onEdit,onDetails,onCopy,onHide,
+}) => (
+  <div className="w-full overflow-x-auto mb-8 text-[10px]">
+    <table className="min-w-full bg-white text-gray-800">
+      <thead className="bg-gray-700 text-white">
+        {showAllSales ? (
+          <tr>{[
+            "DATE DE VENTE","NOM DU CLIENT","prenom","NUMERO BC","ADRESSE DU CLIENT",
+            "CODE INTERP etage","VILLE","CP","TELEPHONE","VENDEUR",
+            "DESIGNATION","TAUX TVA","MONTANT TTC","MONTANT HT",
+            "PREVISION CHANTIER","OBSERVATION","Actions",
+          ].map(h=><th key={h} className="border px-1 py-1">{h}</th>)}</tr>
+        ) : (
+          <tr>{[
+            "Date vente","Client","VENDEUR","BC","désignation produit",
+            "Montant vente TTC (€)","TVA","CA HT (€)","Barème COM",
+            "Montant commissions en €","Actions",
+          ].map(h=><th key={h} className="border px-1 py-1">{h}</th>)}</tr>
+        )}
+      </thead>
+      <tbody>
+        {sales.map((sale)=>{
+          const cancelled = normalizeString(sale.ETAT)==="annule";
+          const warnAddr  = !sale["ADRESSE DU CLIENT"] || !sale.VILLE;
+          const rowClass  = clsx({"bg-red-200 animate-pulse":cancelled,"animate-pulse bg-yellow-100":warnAddr});
+          const ttc = parseFloat(sale["MONTANT TTC"])||0,
+                ht  = parseFloat(sale["MONTANT HT"]) ||0;
+          const paid = (sale.payments||[]).reduce((s,p)=>s+parseFloat(p.montant||0),0);
+          const progress = ttc>0?paid/ttc*100:0;
+
+          return (
+            <tr key={sale._id} className={`${rowClass} hover:bg-gray-100`} onDoubleClick={()=>onDoubleClick(sale)}>
+              {showAllSales ? (
+                <>
+                  <td className="border px-1 py-1">{formatDate(sale["DATE DE VENTE"])}</td>
+                  <td className="border px-1 py-1">{sale["NOM DU CLIENT"]}</td>
+                  <td className="border px-1 py-1">{sale["prenom"]||""}</td>
+                  <td className="border px-1 py-1">{sale["NUMERO BC"]}</td>
+                  <td className="border px-1 py-1">{sale["ADRESSE DU CLIENT"]}</td>
+                  <td className="border px-1 py-1">{sale["CODE INTERP etage"]}</td>
+                  <td className="border px-1 py-1">{sale["VILLE"]}</td>
+                  <td className="border px-1 py-1">{sale["CP"]}</td>
+                  <td className="border px-1 py-1">{sale["TELEPHONE"]}</td>
+                  <td className="border px-1 py-1">{sale["VENDEUR"]}</td>
+                  <td className="border px-1 py-1">{sale["DESIGNATION"]}</td>
+                  <td className="border px-1 py-1">{sale["TAUX TVA"]}</td>
+                  <td className="border px-1 py-1 text-right">{formatNumber(ttc)}</td>
+                  <td className="border px-1 py-1 text-right">{formatNumber(ht)}</td>
+                  <td className="border px-1 py-1">{sale["PREVISION CHANTIER"]?formatDate(sale["PREVISION CHANTIER"]):""}</td>
+                  <td className="border px-1 py-1">{sale["OBSERVATION"]}</td>
+                  <td className="border px-1 py-1"><ActionButtons sale={sale} {...{onEdit,onDetails,onCopy,onHide}}/></td>
+                </>
+              ) : (
+                <>
+                  <td className="border px-1 py-1 relative">
+                    {formatDate(sale["DATE DE VENTE"])}
+                    <div className="absolute bottom-0 left-0 w-full h-1 bg-gray-300">
+                      <div className="bg-green-500 h-1" style={{width:`${progress}%`}}/>
+                    </div>
+                  </td>
+                  <td className="border px-1 py-1">{sale["NOM DU CLIENT"]}</td>
+                  <td className="border px-1 py-1">{sale["VENDEUR"]}</td>
+                  <td className="border px-1 py-1">{sale["NUMERO BC"]}</td>
+                  <td className="border px-1 py-1">{sale["DESIGNATION"]}</td>
+                  <td className="border px-1 py-1 text-right">{formatNumber(ttc)}</td>
+                  <td className="border px-1 py-1">{sale["TAUX TVA"]}</td>
+                  <td className="border px-1 py-1 text-right">{formatNumber(ht)}</td>
+                  <td className={`border px-1 py-1 ${getBaremeBgColor(sale["BAREME COM"])}`}>{sale["BAREME COM"]}</td>
+                  <td className="border px-1 py-1 text-right">{formatNumber(sale["MONTANT COMMISSIONS"])}</td>
+                  <td className="border px-1 py-1"><ActionButtons sale={sale} {...{onEdit,onDetails,onCopy,onHide}}/></td>
+                </>
+              )}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+);
+
+// ------------------------------------------------------------------
+// Totaux (TTC & HT uniquement)
+// ------------------------------------------------------------------
+const TotalsRow = ({ showAllSales,totalTTC,totalHT }) => (
+  <tr className="bg-gray-200 font-bold">
+    {showAllSales ? (
+      <>
+        <td colSpan={12} className="border px-1 py-1 text-right">Totaux :</td>
+        <td className="border px-1 py-1 text-right">{formatNumber(totalTTC)}</td>
+        <td className="border px-1 py-1 text-right">{formatNumber(totalHT)}</td>
+        <td colSpan={3} className="border px-1 py-1"/>
+      </>
+    ) : (
+      <>
+        <td colSpan={5} className="border px-1 py-1 text-right">Totaux :</td>
+        <td className="border px-1 py-1 text-right">{formatNumber(totalTTC)}</td>
+        <td className="border px-1 py-1"/>
+        <td className="border px-1 py-1 text-right">{formatNumber(totalHT)}</td>
+        <td colSpan={3} className="border px-1 py-1"/>
+      </>
+    )}
+  </tr>
+);
+
+// ------------------------------------------------------------------
+// Boutons d'actions
+// ------------------------------------------------------------------
+const ActionButtons = ({ sale,onEdit,onDetails,onCopy,onHide }) => (
+  <div className="flex justify-center gap-1">
+    <button type="button" onClick={()=>onEdit(sale)} className="px-1 py-1 bg-blue-500 text-white rounded" aria-label="Modifier">
+      <FontAwesomeIcon icon={faEdit}/>
+    </button>
+    <button type="button" onClick={()=>onDetails(sale)} className="px-1 py-1 bg-green-500 text-white rounded" aria-label="Détails">
+      <FontAwesomeIcon icon={faFile}/>
+    </button>
+    <button type="button" onClick={()=>onCopy(sale)} className="px-1 py-1 bg-purple-500 text-white rounded" aria-label="Copier">
+      <FontAwesomeIcon icon={faCopy}/>
+    </button>
+    <button type="button" onClick={()=>onHide(sale)} className="px-1 py-1 bg-red-500 text-white rounded" aria-label="Cacher">
+      <FontAwesomeIcon icon={faTrash}/>
+    </button>
+  </div>
+);
+
+// ------------------------------------------------------------------
+// Modal Paiements (inchangé sauf sécurisations mineures)
+// ------------------------------------------------------------------
+const PaymentModal = ({ sale,payments,setPayments,onClose,onSave }) => {
+  const { width,height } = useWindowSize();
+  const [newPayment,setNewPayment] = useState({ amount:"",date:"",comment:"" });
+  const [ocrLoading,setOcrLoading] = useState(false);
+
+  const totalPaid = useMemo(()=>payments.reduce((s,p)=>s+(parseFloat(p.montant)||0),0),[payments]);
+  const totalAmount = parseFloat(sale["MONTANT TTC"])||parseFloat(sale["MONTANT HT"])||0;
+  const progress = totalAmount>0?totalPaid/totalAmount*100:0;
+
+  const extractAmount = (txt)=>txt.match(/(\d+[\.,]\d{2})/)?.[1].replace(",", ".");
+
+  const handleImageUpload = async (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    setOcrLoading(true);
+    try{
+      const { data } = await Tesseract.recognize(file,"fra");
+      const amt = extractAmount(data.text);
+      if(amt) setNewPayment(p=>({...p,amount:amt})); else toast.warn("Aucun montant détecté");
+    }catch{ toast.error("Erreur OCR"); } finally{ setOcrLoading(false); }
+  };
+
+  const addPayment = ()=>{
+    const amt = parseFloat(String(newPayment.amount).replace(",", "."));
+    if(isNaN(amt)||!newPayment.date) return toast.error("Champs invalides");
+    setPayments(p=>[...p,{ id:Date.now(),montant:amt,date:newPayment.date,comment:newPayment.comment }]);
+    setNewPayment({ amount:"",date:"",comment:"" });
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg border border-gray-700 shadow-2xl max-h-[90vh] flex flex-col" onClick={e=>e.stopPropagation()}>
-        <div className="px-5 pt-5 pb-4 border-b border-gray-700/60 flex items-start justify-between">
-          <div>
-            <p className="text-[11px] text-gray-500 uppercase tracking-wider">Confirmation</p>
-            <h3 className="text-white font-bold">{sale["NOM DU CLIENT"]} · BC #{sale["NUMERO BC"]}</h3>
-          </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white text-xl">✕</button>
+    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 text-[10px]">
+      <div className="bg-white w-11/12 md:w-2/3 lg:w-1/2 p-2 rounded-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-xs font-bold">Paiements – {sale["NOM DU CLIENT"]}</h2>
+          <button type="button" onClick={onClose} aria-label="Fermer"><FontAwesomeIcon icon={faTimes}/></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Montant TTC <span className="text-red-400">*</span></label>
-              <input type="number" step="0.01" value={form["MONTANT TTC"]} onChange={e=>set("MONTANT TTC",e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 focus:border-blue-500 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none"/>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">TVA</label>
-              <select value={form["TAUX TVA"]} onChange={e=>set("TAUX TVA",e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 focus:border-blue-500 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none cursor-pointer">
-                {TVA_OPTIONS.map(t=><option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-          </div>
-          {ht > 0 && <p className="text-xs text-emerald-400 -mt-2">CA HT : <strong>{new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(ht)}</strong></p>}
-
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Désignation</label>
-            <input type="text" value={form["DESIGNATION"]} onChange={e=>set("DESIGNATION",e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 focus:border-blue-500 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none"/>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            {[["qte","Qté"],["SURFACE","Surface"],["EMPLACEMENT","Emplacement"]].map(([k,l])=>(
-              <div key={k}>
-                <label className="block text-xs text-gray-400 mb-1">{l}</label>
-                <input type="text" value={form[k]} onChange={e=>set(k,e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 focus:border-blue-500 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none"/>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {[["PREVISION CHANTIER","Prévision chantier"],["DATE PIT","Date PIT"],["DATE TRAVAUX","Date travaux"]].map(([k,l])=>(
-              <div key={k}>
-                <label className="block text-xs text-gray-400 mb-1">{l}</label>
-                <input type="date" value={form[k]} onChange={e=>set(k,e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 focus:border-blue-500 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none"/>
-              </div>
-            ))}
+        <div className="mb-1 text-xs">
+          <p>Total : {formatNumber(totalAmount)}</p>
+          <p>Payé : {formatNumber(totalPaid)}</p>
+          <div className="w-full h-2 bg-gray-200 rounded">
+            <div className="h-2 bg-green-500 rounded" style={{width:`${progress}%`}}/>
           </div>
         </div>
 
-        <div className="px-5 py-4 border-t border-gray-700/60 flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-xl text-sm font-medium transition-colors">Annuler</button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex-[2] py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
-            {saving ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> : <FontAwesomeIcon icon={faCheck}/>}
-            Confirmer &amp; PDF
-          </button>
+        <div className="mb-2">
+          <h3 className="font-semibold">Historique :</h3>
+          {payments.length
+            ? <ul className="list-disc ml-4">{payments.map(p=><li key={p.id}>{formatDate(p.date)} – {formatNumber(p.montant)} {p.comment&&`(${p.comment})`}</li>)}</ul>
+            : <p>Aucun paiement.</p>}
         </div>
+
+        <div className="space-y-1">
+          <input type="number" step="0.01" value={newPayment.amount} onChange={e=>setNewPayment(p=>({...p,amount:e.target.value}))}
+                 placeholder="Montant" className="p-1 border rounded w-full"/>
+          <input type="date" value={newPayment.date} onChange={e=>setNewPayment(p=>({...p,date:e.target.value}))}
+                 className="p-1 border rounded w-full"/>
+          <textarea value={newPayment.comment} onChange={e=>setNewPayment(p=>({...p,comment:e.target.value}))}
+                    placeholder="Commentaire" className="p-1 border rounded w-full"/>
+          <input type="file" accept="image/*" onChange={handleImageUpload}/>
+          {ocrLoading&&<span>Analyse OCR…</span>}
+          <button type="button" onClick={addPayment} className="px-2 py-1 bg-green-600 text-white rounded">Ajouter</button>
+        </div>
+
+        <button type="button" onClick={onSave} className="mt-2 px-2 py-1 bg-blue-600 text-white rounded">Sauvegarder</button>
       </div>
+      <Confetti width={width} height={height} recycle={false} numberOfPieces={150}/>
     </div>
   );
 };
 
-// ─────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------
 // Composant principal
-// ─────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------
 const AllSales = () => {
   const router = useRouter();
-  const [sales, setSales]       = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(null);
-  const [month, setMonth]       = useState(new Date().getMonth());
-  const [year, setYear]         = useState(new Date().getFullYear());
-  const [search, setSearch]     = useState("");
-  const [tab, setTab]           = useState("all"); // "all" | "pending" | "confirmed"
-  const [confirmSale, setConfirm] = useState(null);
+  const [sales,setSales] = useState([]);
+  const [showAllSales,setShowAllSales] = useState(true);
+  const [selectedMonth,setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear,setSelectedYear] = useState(new Date().getFullYear());
+  const [searchTerm,setSearchTerm] = useState("");
+  const [sortField,setSortField] = useState("DATE DE VENTE");
+  const [sortOrder,setSortOrder] = useState("asc");
+  const [currentPage,setCurrentPage] = useState(1);
+  const [loading,setLoading] = useState(true);
+  const [error,setError] = useState(null);
+  const [modalSale,setModalSale] = useState(null);
+  const [hiddenSales,setHiddenSales] = useState(()=>typeof window==="undefined"?[]:JSON.parse(localStorage.getItem("hiddenSales")||"[]"));
+
   const abortRef = useRef(null);
 
-  // Fetch
-  const fetchSales = useCallback(async () => {
-    setLoading(true); setError(null);
+  const fetchSales = useCallback(async ()=>{
+    setLoading(true);
     if (abortRef.current) abortRef.current.abort();
-    const ctrl = new AbortController(); abortRef.current = ctrl;
-    try {
-      const res = await fetch(`/api/ventes?month=${month}&year=${year}`, { signal: ctrl.signal });
-      if (!res.ok) throw new Error(res.statusText);
-      setSales((await res.json()).data || []);
-    } catch (e) { if (e?.name !== "AbortError") setError(e.message); }
-    finally { setLoading(false); }
-  }, [month, year]);
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-  useEffect(() => { fetchSales(); return () => abortRef.current?.abort(); }, [fetchSales]);
+    try{
+      const res = await fetch("/api/ventes", { signal: controller.signal });
+      if(!res.ok) throw new Error(res.statusText);
+      const data = await res.json();
+      setSales(processSalesData(data.data || []));
+    }catch(err){
+      if (err?.name !== "AbortError") setError(err.message);
+    } finally{
+      setLoading(false);
+    }
+  },[]);
 
-  // Filtrage
-  const filtered = useMemo(() => {
-    const q = norm(search);
-    return sales
-      .filter(s => !isAnnule(s))
-      .filter(s => {
-        if (tab === "pending")   return !hasMontant(s);
-        if (tab === "confirmed") return hasMontant(s);
-        return true;
-      })
-      .filter(s => !q || [s["NOM DU CLIENT"],s["VENDEUR"],s["ADRESSE DU CLIENT"],s["VILLE"],s["DESIGNATION"],s["TELEPHONE"],s["NUMERO BC"]]
-        .some(f => norm(f||"").includes(q)));
-  }, [sales, search, tab]);
+  useEffect(()=>{
+    fetchSales();
+    return ()=> { if (abortRef.current) abortRef.current.abort(); };
+  },[fetchSales]);
 
-  const counts = useMemo(() => ({
-    all:       sales.filter(s => !isAnnule(s)).length,
-    pending:   sales.filter(s => !isAnnule(s) && !hasMontant(s)).length,
-    confirmed: sales.filter(s => !isAnnule(s) &&  hasMontant(s)).length,
-  }), [sales]);
+  // Filtres
+  const filteredSales = useMemo(()=>sales.filter(s=>{
+    if(hiddenSales.includes(s._id)) return false;
+    const d = new Date(s["DATE DE VENTE"]);
+    if(!showAllSales && (d.getMonth()!==selectedMonth||d.getFullYear()!==selectedYear)) return false;
+    if(searchTerm){
+      const n = normalizeString(searchTerm);
+      const fields=[s["NOM DU CLIENT"],s["TELEPHONE"],s["ADRESSE DU CLIENT"],s["VENDEUR"],s["DESIGNATION"]];
+      if(!fields.some(f=>normalizeString(f||"").includes(n))) return false;
+    }
+    return true;
+  }),[sales,hiddenSales,showAllSales,selectedMonth,selectedYear,searchTerm]);
 
-  const totalTTC = useMemo(() =>
-    filtered.filter(hasMontant).reduce((s,v) => s + (parseFloat(v["MONTANT TTC"])||0), 0),
-  [filtered]);
+  const sortedSales = useMemo(()=>[...filteredSales].sort((a,b)=>{
+    let A=a[sortField], B=b[sortField];
+    if(sortField.includes("DATE")){ A=new Date(A||0); B=new Date(B||0); }
+    else if(sortField.includes("MONTANT")){ A=parseFloat(A)||0; B=parseFloat(B)||0; }
+    else{ A=normalizeString(A); B=normalizeString(B);}
+    if(A<B) return sortOrder==="asc"?-1:1;
+    if(A>B) return sortOrder==="asc"?1:-1;
+    return 0;
+  }),[filteredSales,sortField,sortOrder]);
+
+  const paginatedSales = useMemo(()=>{
+    const start=(currentPage-1)*ITEMS_PER_PAGE;
+    return sortedSales.slice(start,start+ITEMS_PER_PAGE);
+  },[sortedSales,currentPage]);
+
+  const totalPages = Math.max(1,Math.ceil(sortedSales.length/ITEMS_PER_PAGE));
+
+  // Totaux (TTC & HT)
+  const [totalTTC,totalHT] = useMemo(()=>{
+    let ttc=0,ht=0;
+    paginatedSales.forEach(s=>{
+      if(normalizeString(s.ETAT)==="annule") return;
+      ttc+=parseFloat(s["MONTANT TTC"])||0;
+      ht +=parseFloat(s["MONTANT HT"]) ||0;
+    });
+    return [ttc,ht];
+  },[paginatedSales]);
 
   // Handlers
-  const handleDelete = useCallback(async (sale) => {
-    if (!confirm(`Supprimer la vente de ${sale["NOM DU CLIENT"]} ?`)) return;
-    try {
-      await fetch(`/api/ventes/${sale._id}`, { method: "DELETE" });
-      setSales(p => p.filter(s => s._id !== sale._id));
-      toast.success("Vente supprimée");
-    } catch { toast.error("Erreur lors de la suppression"); }
-  }, []);
-
-  const handleConfirmSave = useCallback(async (id, payload) => {
-    try {
-      const res = await fetch(`/api/ventes/${id}`, {
-        method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const { data } = await res.json();
-      setSales(p => p.map(s => s._id === id ? data : s));
-      toast.success("Confirmée !");
-      setTimeout(() => router.push(`/file/details/${id}`), 400);
-      return true;
-    } catch (e) { toast.error(e.message); return false; }
-  }, [router]);
-
-  // CSV
-  const EXPORT_COLS = ["DATE DE VENTE","NOM DU CLIENT","prenom","ADRESSE DU CLIENT","VILLE","CP","TELEPHONE","VENDEUR","NUMERO BC","DESIGNATION","MONTANT TTC","TAUX TVA","MONTANT HT","ETAT","PREVISION CHANTIER"];
-
-  const downloadCSV = useCallback(() => {
-    if (!filtered.length) return;
-    const rows = [EXPORT_COLS.join(";"), ...filtered.map(s => EXPORT_COLS.map(c => s[c]||"").join(";"))];
-    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `ventes-${MONTHS[month]}-${year}.csv`; a.click();
-  }, [filtered, month, year]);
-
-  // Colonnes dans l'ordre exact du tableau Excel
-  const COPY_ROW_COLS = [
-    "DATE DE VENTE",       // A
-    "NOM DU CLIENT",       // B
-    "prenom",              // C
-    "NUMERO BC",           // D
-    "ADRESSE DU CLIENT",   // E
-    "CODE INTERP etage",   // F — infos complémentaires
-    "VILLE",               // G
-    "CP",                  // H
-    "TELEPHONE",           // I
-    "VENDEUR",             // J
-    "DESIGNATION",         // K
-    "TAUX TVA",            // L
-    "MONTANT TTC",         // M
-    "MONTANT HT",          // N
-    "PREVISION CHANTIER",  // O
-    "OBSERVATION",         // P
-  ];
-
-  // Copie une ligne au format TSV (collable directement dans Excel)
-  const copyRow = useCallback(async (sale) => {
-    const fmtCell = (v, col) => {
-      if (v === null || v === undefined || v === "") return "";
-      if (col === "DATE DE VENTE" || col === "PREVISION CHANTIER") return fmtD(v);
-      if (col === "TAUX TVA" || col === "MONTANT TTC" || col === "MONTANT HT") {
-        const n = Number(String(v).replace("%","").replace(",","."));
-        if (!Number.isFinite(n)) return "";
-        return String(n).replace(".", ","); // décimal FR pour Excel
-      }
-      return String(v).replace(/\t/g, " ").replace(/\r?\n/g, " ");
-    };
-    const tsv = COPY_ROW_COLS.map(c => fmtCell(sale[c], c)).join("\t");
-    try {
-      await navigator.clipboard.writeText(tsv);
-      toast.success("Ligne copiée — collez dans Excel");
-    } catch {
-      toast.error("Copie impossible");
+  const handleHideSale = (sale)=>{
+    if(confirm("Cacher cette vente ?")){
+      const updated=[...hiddenSales,sale._id];
+      setHiddenSales(updated);
+      localStorage.setItem("hiddenSales",JSON.stringify(updated));
+      toast.success("Vente cachée");
     }
-  }, []);
+  };
 
-  if (loading) return <TableSkeleton />;
-  if (error) return (
-    <div className="min-h-[calc(100vh-64px)] bg-gray-900 flex items-center justify-center">
-      <p className="text-red-400">{error}</p>
-    </div>
-  );
+  const handleCopySale = (sale)=>{
+    const txt = `Date : ${formatDate(sale["DATE DE VENTE"])}\nClient : ${sale["NOM DU CLIENT"]}\nMontant TTC : ${formatNumber(sale["MONTANT TTC"])}`;
+    navigator.clipboard.writeText(txt).then(()=>toast.success("Copié !"));
+  };
+
+  const handleCopyCSV = ()=>{
+    if(!paginatedSales.length) return toast.info("Rien à copier");
+    const fields=["DATE DE VENTE","NOM DU CLIENT","MONTANT TTC","MONTANT HT"];
+    const csv=[fields.join(";"),...paginatedSales.map(s=>fields.map(f=>s[f]||"").join(";"))].join("\n");
+    navigator.clipboard.writeText(csv).then(()=>toast.success("CSV copié"));
+  };
+
+  const handleDownloadCSV = ()=>{
+    if(!paginatedSales.length) return toast.info("Rien à télécharger");
+    const blob=new Blob([paginatedSales.map(s=>Object.values(s).join(";")).join("\n")],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download="ventes.csv"; a.click(); URL.revokeObjectURL(url);
+  };
+
+  const handleSaveModalSale = async ()=>{
+    if(!modalSale) return;
+    try{
+      const res = await fetch(`/api/ventes/${modalSale._id}`,{
+        method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(modalSale)
+      });
+      if(!res.ok) throw new Error(await res.text());
+      toast.success("Sauvegardé !");
+      setModalSale(null); fetchSales();
+    }catch(err){ toast.error(err.message);}
+  };
+
+  // ----------------------------------------------------------------
+  // Render
+  // ----------------------------------------------------------------
+  if(loading) return <Loader/>;
+  if(error)  return <p className="text-red-600">Erreur : {error}</p>;
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-gray-900 text-white">
-      <div className="px-4 py-4 space-y-4">
+    <div className="min-h-screen bg-gray-800 text-[10px] p-2 flex flex-col items-center">
+      <button type="button" onClick={()=>router.back()} className="mb-1 px-2 py-1 bg-gray-700 text-white rounded">Retour</button>
 
-        {/* ── Barre du haut ── */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => router.back()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg text-xs border border-gray-700 transition-colors shrink-0">
-            <FontAwesomeIcon icon={faChevronLeft} className="text-[10px]"/> Retour
-          </button>
+      <FiltersBar
+        showAllSales={showAllSales}
+        toggleShowAll={()=>{ setShowAllSales(v=>!v); setCurrentPage(1); }}
+        searchTerm={searchTerm}
+        onSearchChange={e=>{setSearchTerm(e.target.value); setCurrentPage(1);}}
+        sortField={sortField} setSortField={(v)=>{ setSortField(v); setCurrentPage(1); }}
+        sortOrder={sortOrder} setSortOrder={(v)=>{ setSortOrder(v); setCurrentPage(1); }}
+        copyCSV={handleCopyCSV} downloadCSV={handleDownloadCSV}
+        selectedMonth={selectedMonth} setSelectedMonth={(m)=>{ setSelectedMonth(m); setCurrentPage(1); }}
+        selectedYear={selectedYear} setSelectedYear={(y)=>{ setSelectedYear(y); setCurrentPage(1); }}
+      />
 
-          {/* Mois */}
-          <div className="flex gap-1 flex-wrap">
-            {MONTHS.map((m,i) => (
-              <button key={m} onClick={() => { setMonth(i); }}
-                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
-                  month === i ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-500 hover:text-white hover:bg-gray-700 border border-gray-700/60"
-                }`}>{m.slice(0,4)}</button>
-            ))}
-          </div>
+      <SalesTable
+        sales={paginatedSales} showAllSales={showAllSales}
+        onDoubleClick={setModalSale}
+        onEdit={s=>window.location.assign(`/sales/edit/${s._id}`)}
+        onDetails={s=>window.location.assign(`/file/details/${s._id}`)}
+        onCopy={handleCopySale} onHide={handleHideSale}
+      />
 
-          <select value={year} onChange={e => setYear(+e.target.value)}
-            className="px-2.5 py-1.5 bg-gray-800 border border-gray-700 text-white text-xs rounded-lg focus:outline-none cursor-pointer">
-            {Array.from({length:5},(_,k) => new Date().getFullYear()-k).map(y=>(
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-
-          {/* Search */}
-          <div className="relative ml-auto">
-            <FontAwesomeIcon icon={faSearch} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs pointer-events-none"/>
-            <input value={search} onChange={e=>setSearch(e.target.value)}
-              placeholder="Rechercher…"
-              className="pl-8 pr-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 w-40 transition-colors"/>
-          </div>
-
-          {/* Export */}
-          <button onClick={downloadCSV} title="Exporter CSV"
-            className="w-8 h-8 flex items-center justify-center bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-400 hover:text-white transition-colors">
-            <FontAwesomeIcon icon={faDownload} className="text-xs"/>
-          </button>
+      {/* Pagination */}
+      {totalPages>1 && (
+        <div className="flex gap-1 mb-2">
+          <button type="button" disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)}
+                  className="px-2 py-1 bg-gray-600 text-white rounded disabled:opacity-50">←</button>
+          <span className="self-center text-white">{currentPage} / {totalPages}</span>
+          <button type="button" disabled={currentPage===totalPages} onClick={()=>setCurrentPage(p=>p+1)}
+                  className="px-2 py-1 bg-gray-600 text-white rounded disabled:opacity-50">→</button>
         </div>
-
-        {/* ── Tabs ── */}
-        <div className="flex items-center gap-1 border-b border-gray-700/60 pb-0">
-          {[
-            { key:"all",       label:"Toutes",    count: counts.all },
-            { key:"pending",   label:"En attente", count: counts.pending },
-            { key:"confirmed", label:"Confirmées", count: counts.confirmed },
-          ].map(({ key, label, count }) => (
-            <button key={key} onClick={() => setTab(key)}
-              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-all -mb-px ${
-                tab === key
-                  ? key === "confirmed"
-                    ? "border-emerald-500 text-emerald-400"
-                    : key === "pending"
-                    ? "border-amber-500 text-amber-400"
-                    : "border-blue-500 text-blue-400"
-                  : "border-transparent text-gray-500 hover:text-gray-300"
-              }`}>
-              {label}
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                tab === key ? "bg-current/15 text-current" : "bg-gray-800 text-gray-600"
-              }`} style={tab === key ? {backgroundColor:"currentColor", opacity:1} : {}}>
-                <span className={tab === key ? "opacity-100" : ""}>{count}</span>
-              </span>
-            </button>
-          ))}
-
-          {/* Total CA (aligné à droite) */}
-          {totalTTC > 0 && (
-            <div className="ml-auto pb-2 text-right">
-              <span className="text-[10px] text-gray-500">CA TTC affiché · </span>
-              <span className="text-sm font-bold text-white">
-                {new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(totalTTC)}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* ── Tableau ── */}
-        {filtered.length === 0 ? (
-          <div className="bg-gray-800/50 border border-dashed border-gray-700 rounded-xl py-16 text-center">
-            <p className="text-gray-500 text-sm">Aucune vente trouvée</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-700/60">
-            <table className="min-w-full text-xs">
-              <thead>
-                <tr className="bg-gray-800 border-b border-gray-700/60">
-                  {["Date","Client","Adresse","Ville","Tél","Vendeur","BC","Désignation","Montant TTC","TVA","CA HT","Chantier","Statut","Actions"].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-700/30">
-                {filtered.map((sale, idx) => {
-                  const confirmed = hasMontant(sale);
-                  return (
-                    <tr key={sale._id}
-                      className={`group transition-colors ${
-                        idx % 2 === 0 ? "bg-gray-900" : "bg-gray-800/30"
-                      } hover:bg-gray-700/40`}>
-
-                      {/* Indicateur latéral */}
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${confirmed ? "bg-emerald-500" : "bg-amber-500"}`}/>
-                          <span className="text-gray-300">{fmtD(sale["DATE DE VENTE"])}</span>
-                        </div>
-                      </td>
-
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <p className="text-white font-medium">{sale["NOM DU CLIENT"]}</p>
-                        {sale["prenom"] && <p className="text-gray-500 text-[10px]">{sale["prenom"]}</p>}
-                      </td>
-
-                      <td className="px-3 py-2.5 text-gray-400 max-w-[160px] truncate">
-                        {sale["ADRESSE DU CLIENT"] || "—"}
-                      </td>
-
-                      <td className="px-3 py-2.5 whitespace-nowrap text-gray-400">
-                        {sale["VILLE"] || "—"}{sale["CP"] ? ` ${sale["CP"]}` : ""}
-                      </td>
-
-                      <td className="px-3 py-2.5 whitespace-nowrap text-gray-400 font-mono">
-                        {sale["TELEPHONE"] || "—"}
-                      </td>
-
-                      <td className="px-3 py-2.5 whitespace-nowrap text-gray-300">
-                        {sale["VENDEUR"] || "—"}
-                      </td>
-
-                      <td className="px-3 py-2.5 whitespace-nowrap text-gray-400 font-mono">
-                        {sale["NUMERO BC"] || "—"}
-                      </td>
-
-                      <td className="px-3 py-2.5 text-gray-400 max-w-[140px] truncate">
-                        {sale["DESIGNATION"] || "—"}
-                      </td>
-
-                      <td className="px-3 py-2.5 whitespace-nowrap text-right font-semibold">
-                        {confirmed ? <span className="text-white">{fmtCur(sale["MONTANT TTC"])}</span> : <span className="text-gray-600">—</span>}
-                      </td>
-
-                      <td className="px-3 py-2.5 whitespace-nowrap text-gray-500 text-center">
-                        {confirmed ? (sale["TAUX TVA"] || "—") : "—"}
-                      </td>
-
-                      <td className="px-3 py-2.5 whitespace-nowrap text-right text-gray-400">
-                        {confirmed ? fmtCur(sale["MONTANT HT"]) : "—"}
-                      </td>
-
-                      <td className="px-3 py-2.5 whitespace-nowrap text-gray-500">
-                        {sale["PREVISION CHANTIER"] ? fmtD(sale["PREVISION CHANTIER"]) : "—"}
-                      </td>
-
-                      {/* Badge statut */}
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        {confirmed ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded-full font-semibold">
-                            ✓ Confirmé
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] bg-amber-500/15 text-amber-400 border border-amber-500/25 px-2 py-0.5 rounded-full font-semibold">
-                            En attente
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => router.push(`/sales/edit/${sale._id}`)}
-                            className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-blue-600 rounded-lg transition-colors" title="Modifier">
-                            <FontAwesomeIcon icon={faEdit} className="text-[10px]"/>
-                          </button>
-
-                          <button onClick={() => copyRow(sale)}
-                            className="w-7 h-7 flex items-center justify-center bg-indigo-600/80 hover:bg-indigo-500 text-white rounded-lg transition-colors shadow-sm ring-1 ring-indigo-400/30" title="Copier la ligne pour Excel">
-                            <FontAwesomeIcon icon={faCopy} className="text-xs"/>
-                          </button>
-
-                          {confirmed ? (
-                            <button onClick={() => router.push(`/file/details/${sale._id}`)}
-                              className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-blue-500 rounded-lg transition-colors" title="Voir PDF">
-                              <FontAwesomeIcon icon={faFile} className="text-[10px]"/>
-                            </button>
-                          ) : (
-                            <button onClick={() => setConfirm(sale)}
-                              className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-emerald-600 rounded-lg transition-colors" title="Confirmer">
-                              <FontAwesomeIcon icon={faCheck} className="text-[10px]"/>
-                            </button>
-                          )}
-
-                          <button onClick={() => handleDelete(sale)}
-                            className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-red-600 rounded-lg transition-colors" title="Supprimer">
-                            <FontAwesomeIcon icon={faTrash} className="text-[10px]"/>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {confirmSale && (
-        <ConfirmModal sale={confirmSale} onClose={() => setConfirm(null)} onSave={handleConfirmSave}/>
       )}
 
-      <ToastContainer position="bottom-center" autoClose={2500} hideProgressBar newestOnTop theme="dark"/>
+      {/* Totaux (table cachée pour alignement) */}
+      <table className="hidden" aria-hidden="true"><tbody>
+        <TotalsRow showAllSales={showAllSales} totalTTC={totalTTC} totalHT={totalHT}/>
+      </tbody></table>
+
+      {modalSale && (
+        <PaymentModal
+          sale={modalSale}
+          payments={modalSale.payments||[]}
+          setPayments={p=>setModalSale(s=>({...s,payments:p}))}
+          onClose={()=>setModalSale(null)}
+          onSave={handleSaveModalSale}
+        />
+      )}
+
+      <ToastContainer position="bottom-center" autoClose={2500} hideProgressBar newestOnTop/>
     </div>
   );
 };
