@@ -86,7 +86,7 @@ export const MyDocument = ({ sale }) => {
 
           {/* Délai */}
           <View style={s.sectionBar}>
-            <Text style={s.sectionTitle}>Délai d'intervention : {fmtDate(sale["PREVISION CHANTIER"])}</Text>
+            <Text style={s.sectionTitle}>{`Délai d'intervention : ${fmtDate(sale["PREVISION CHANTIER"])}`}</Text>
           </View>
 
           {/* Dates PIT / Travaux */}
