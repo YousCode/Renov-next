@@ -432,8 +432,8 @@ const AllSales = () => {
                           </button>
 
                           <button onClick={() => copyRow(sale)}
-                            className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-indigo-600 rounded-lg transition-colors" title="Copier la ligne (Excel)">
-                            <FontAwesomeIcon icon={faCopy} className="text-[10px]"/>
+                            className="w-7 h-7 flex items-center justify-center bg-indigo-600/80 hover:bg-indigo-500 text-white rounded-lg transition-colors shadow-sm ring-1 ring-indigo-400/30" title="Copier la ligne pour Excel">
+                            <FontAwesomeIcon icon={faCopy} className="text-xs"/>
                           </button>
 
                           {confirmed ? (
