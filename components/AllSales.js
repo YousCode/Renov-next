@@ -231,13 +231,39 @@ const AllSales = () => {
     a.download = `ventes-${MONTHS[month]}-${year}.csv`; a.click();
   }, [filtered, month, year]);
 
+  // Colonnes dans l'ordre exact du tableau Excel
+  const COPY_ROW_COLS = [
+    "DATE DE VENTE",       // A
+    "NOM DU CLIENT",       // B
+    "prenom",              // C
+    "NUMERO BC",           // D
+    "ADRESSE DU CLIENT",   // E
+    "CODE INTERP etage",   // F — infos complémentaires
+    "VILLE",               // G
+    "CP",                  // H
+    "TELEPHONE",           // I
+    "VENDEUR",             // J
+    "DESIGNATION",         // K
+    "TAUX TVA",            // L
+    "MONTANT TTC",         // M
+    "MONTANT HT",          // N
+    "PREVISION CHANTIER",  // O
+    "OBSERVATION",         // P
+  ];
+
   // Copie une ligne au format TSV (collable directement dans Excel)
   const copyRow = useCallback(async (sale) => {
-    const fmtCell = (v) => {
-      const s = String(v ?? "");
-      return s.replace(/\t/g, " ").replace(/\r?\n/g, " ");
+    const fmtCell = (v, col) => {
+      if (v === null || v === undefined || v === "") return "";
+      if (col === "DATE DE VENTE" || col === "PREVISION CHANTIER") return fmtD(v);
+      if (col === "TAUX TVA" || col === "MONTANT TTC" || col === "MONTANT HT") {
+        const n = Number(String(v).replace("%","").replace(",","."));
+        if (!Number.isFinite(n)) return "";
+        return String(n).replace(".", ","); // décimal FR pour Excel
+      }
+      return String(v).replace(/\t/g, " ").replace(/\r?\n/g, " ");
     };
-    const tsv = EXPORT_COLS.map(c => fmtCell(sale[c])).join("\t");
+    const tsv = COPY_ROW_COLS.map(c => fmtCell(sale[c], c)).join("\t");
     try {
       await navigator.clipboard.writeText(tsv);
       toast.success("Ligne copiée — collez dans Excel");
