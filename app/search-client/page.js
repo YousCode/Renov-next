@@ -7,7 +7,7 @@ const SearchClientPage = () => {
   return (
     <>
       <Navbar />
-      <SearchClient />;
+      <SearchClient />
     </>
   )
 };

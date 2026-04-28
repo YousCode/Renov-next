@@ -4,8 +4,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 // Utilitaires -----------------------------------------------------------
-const normalizeString = (str) =>
-  str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase() : "";
+const normalizeString = (str) => {
+  if (str === null || str === undefined || str === "") return "";
+  return String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+};
 
 const fmtDate = (value) => {
   if (!value) return "—";

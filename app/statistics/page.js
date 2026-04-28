@@ -17,8 +17,10 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
 // ─────────────────────────────────────────────────────────────
 // Utils
 // ─────────────────────────────────────────────────────────────
-const norm = (s) =>
-  s ? s.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
+const norm = (s) => {
+  if (s === null || s === undefined || s === "") return "";
+  return String(s).trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+};
 
 const fmtCur = (n, compact = false) => {
   if (compact && Math.abs(n) >= 1000)

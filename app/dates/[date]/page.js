@@ -585,7 +585,7 @@ export default function DateDetails() {
     try {
       if (searchTerm.length > 1) {
         const response = await fetch(
-          `/api/ventes/search?searchTerm=${encodeURIComponent(searchTerm)}`
+          `/api/ventes/search?q=${encodeURIComponent(searchTerm)}`
         );
         if (!response.ok) {
           throw new Error(`Failed to fetch: ${response.statusText}`);

@@ -36,7 +36,7 @@ const ExplorerView = () => {
     setIsSearching(true);
     try {
       const response = await fetch(
-        `/api/ventes/search?searchTerm=${encodeURIComponent(raw)}`
+        `/api/ventes/search?q=${encodeURIComponent(raw)}`
       );
       if (!response.ok) {
         throw new Error(`Failed to fetch: ${response.statusText}`);

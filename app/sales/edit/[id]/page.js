@@ -12,6 +12,7 @@
 import React, { useEffect, useState, memo } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useForm, Controller, useWatch } from "react-hook-form";
@@ -267,7 +268,21 @@ const EditSaleImproved = () => {
 
           {/* Adresse */}
           <Field label="Adresse" name="ADRESSE DU CLIENT" errorText={errors["ADRESSE DU CLIENT"]?.message}>
-            <Controller control={control} name="ADRESSE DU CLIENT" render={({ field }) => <input {...field} className="border p-2 rounded w-full" />} />
+            <Controller
+              control={control}
+              name="ADRESSE DU CLIENT"
+              render={({ field }) => (
+                <AddressAutocomplete
+                  value={field.value}
+                  onChange={field.onChange}
+                  onSelect={({ address, city, postcode }) => {
+                    field.onChange(address);
+                    if (city) setValue("VILLE", city, { shouldValidate: true, shouldDirty: true });
+                    if (postcode) setValue("CP", postcode, { shouldValidate: true, shouldDirty: true });
+                  }}
+                />
+              )}
+            />
           </Field>
           <Field label="CODE INTERP etage" name="CODE INTERP etage" errorText={errors["CODE INTERP etage"]?.message}>
             <Controller control={control} name="CODE INTERP etage" render={({ field }) => <input {...field} className="border p-2 rounded w-full" />} />
