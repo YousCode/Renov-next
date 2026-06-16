@@ -20,6 +20,7 @@ export const Navbar = () => {
     { name: "Accueil", path: "/dashboard" },
     { name: "Chercher Clients", path: "/explorer" },
     { name: "Statistiques", path: "/statistics" },
+    { name: "Carte", path: "/map", isNew: true },
   ];
 
   async function logout() {
@@ -53,8 +54,13 @@ export const Navbar = () => {
         <div className="hidden lg:flex items-center space-x-4">
           {navMenu.map((item, index) => (
             <Link key={index} href={item.path}>
-              <span className="text-lg text-white hover:text-gray-300 cursor-pointer">
+              <span className="text-lg text-white hover:text-gray-300 cursor-pointer relative inline-flex items-center">
                 {item.name}
+                {item.isNew && (
+                  <span className="ml-1 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-yellow-300 text-emerald-900 align-super leading-none">
+                    NEW
+                  </span>
+                )}
               </span>
             </Link>
           ))}
@@ -129,8 +135,13 @@ export const Navbar = () => {
           <div className="flex flex-col items-center space-y-4 bg-green-500 py-4">
             {navMenu.map((item, index) => (
               <Link key={index} href={item.path}>
-                <span className="text-lg text-white hover:text-gray-200 cursor-pointer">
+                <span className="text-lg text-white hover:text-gray-200 cursor-pointer inline-flex items-center">
                   {item.name}
+                  {item.isNew && (
+                    <span className="ml-1 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-yellow-300 text-emerald-900 leading-none">
+                      NEW
+                    </span>
+                  )}
                 </span>
               </Link>
             ))}
