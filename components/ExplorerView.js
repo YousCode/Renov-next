@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSelector } from "react-redux";
 
@@ -23,24 +23,35 @@ const ExplorerView = () => {
 
   const user = useSelector((state) => state.Auth.user);
 
-  const handleInputChange = async (e) => {
-    const raw = e.target.value;
-    const term = norm(raw);
-    setSearchTerm(raw);
+  const debounceRef = useRef(null);
+  const abortRef = useRef(null);
 
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (abortRef.current) abortRef.current.abort();
+    },
+    [],
+  );
+
+  const runSearch = async (raw) => {
+    const term = norm(raw);
     if (!term) {
       setSearchResults([]);
+      setIsSearching(false);
       return;
     }
 
+    if (abortRef.current) abortRef.current.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
     setIsSearching(true);
     try {
-      const response = await fetch(
-        `/api/ventes/search?q=${encodeURIComponent(raw)}`
-      );
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.statusText}`);
-      }
+      const response = await fetch(`/api/ventes/search?q=${encodeURIComponent(raw)}`, {
+        signal: ctrl.signal,
+      });
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
       const data = await response.json();
 
       if (!data.success) {
@@ -122,11 +133,27 @@ const ExplorerView = () => {
 
       setSearchResults(finalResults);
     } catch (error) {
-      console.error("Search error:", error);
-      setSearchResults([]);
+      if (error.name !== "AbortError") {
+        console.error("Search error:", error);
+        setSearchResults([]);
+      }
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const handleInputChange = (e) => {
+    const raw = e.target.value;
+    setSearchTerm(raw);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!raw.trim()) {
+      if (abortRef.current) abortRef.current.abort();
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    debounceRef.current = setTimeout(() => runSearch(raw), 250);
   };
 
   const handleSelectSale = (sales) => {

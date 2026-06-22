@@ -1,11 +1,11 @@
 // app/layout.js
 
-import { Inter } from "next/font/google";
-import ReduxProvider from './ReduxProvider'; // Assurez-vous que le chemin est correct
-import ClientProvider from '../components/ClientProvider'; // Assurez-vous que le chemin est correct
+import ReduxProvider from './ReduxProvider';
+import ClientProvider from '../components/ClientProvider';
 import './globals.css';
 
-const inter = Inter({ subsets: ["latin"] });
+// Pile système — chargement instantané, zéro requête réseau au boot.
+const interClassName = "font-sans antialiased";
 
 export const metadata = {
   title: "Renov Habitat",
@@ -15,7 +15,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={interClassName}>
         <ReduxProvider>
           <ClientProvider>
             {children}
