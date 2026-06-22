@@ -99,6 +99,41 @@ const fmtMoney = (n) => {
   }).format(num);
 };
 
+// Mois en français (pour la recherche)
+const MONTHS_FR = [
+  "janvier", "fevrier", "mars", "avril", "mai", "juin",
+  "juillet", "aout", "septembre", "octobre", "novembre", "decembre",
+];
+
+const saleSearchTokens = (sale) => {
+  const tokens = [
+    sale?.["DESIGNATION"],
+    sale?.["VENDEUR"],
+    sale?.["NUMERO BC"],
+    sale?.["ETAT"],
+  ];
+  const d = new Date(sale?.["DATE DE VENTE"]);
+  if (!isNaN(d.getTime())) {
+    tokens.push(String(d.getFullYear()));
+    tokens.push(MONTHS_FR[d.getMonth()]);
+    tokens.push(`${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`);
+  }
+  return tokens;
+};
+
+// Concatène tous les champs cherchables d'un client en une seule chaîne normalisée.
+const buildHaystack = (point) => {
+  const parts = [
+    point.name,
+    point.address,
+    point.city,
+    point.cp,
+    point.phone,
+    ...point.sales.flatMap(saleSearchTokens),
+  ];
+  return parts.map(norm).filter(Boolean).join(" ");
+};
+
 // ────────────────────────────────────────────────────────────────
 // Cache de géocodage (localStorage)
 // ────────────────────────────────────────────────────────────────
@@ -266,7 +301,7 @@ const MapHeader = ({ search, onSearch, totalRevenue, totalClients, totalProjects
           type="search"
           value={search}
           onChange={(e) => onSearch(e.target.value)}
-          placeholder="Nom, ville, CP…"
+          placeholder="Nom, ville, vendeur, BC, mars 2026…"
           className="pl-8 pr-3 py-1.5 border border-emerald-200 rounded-md text-slate-800 w-64 bg-white/80 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7db86e] focus:border-[#7db86e] text-sm"
         />
         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">⌕</span>
@@ -460,19 +495,22 @@ const ClientsMap = () => {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
 
+  // Haystack normalisé par client, mémoïsé une fois par changement de points.
+  const searchablePoints = useMemo(
+    () => points.map((p) => ({ point: p, haystack: buildHaystack(p) })),
+    [points],
+  );
+
   const visiblePoints = useMemo(() => {
-    const nq = norm(search);
-    return points.filter((p) => {
-      if (filter !== "all" && statusOf(p.sales) !== filter) return false;
-      if (!nq) return true;
-      return (
-        norm(p.name).includes(nq) ||
-        norm(p.address).includes(nq) ||
-        norm(p.city).includes(nq) ||
-        norm(p.cp).includes(nq)
-      );
-    });
-  }, [points, filter, search]);
+    const tokens = norm(search).split(/\s+/).filter(Boolean);
+    return searchablePoints
+      .filter(({ point, haystack }) => {
+        if (filter !== "all" && statusOf(point.sales) !== filter) return false;
+        if (!tokens.length) return true;
+        return tokens.every((t) => haystack.includes(t));
+      })
+      .map(({ point }) => point);
+  }, [searchablePoints, filter, search]);
 
   const stats = useMemo(() => {
     const s = { validated: 0, cancelled: 0, mixed: 0, pending: 0 };
