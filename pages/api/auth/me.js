@@ -1,13 +1,15 @@
 import connectToDatabase from '../../../lib/mongodb';
 import User from '../../../models/user';
 import jwt from 'jsonwebtoken';
-
-const config = {
-  secret: 'YOUR_SECRET_KEY',
-};
+import config from '../../../config';
 
 export default async function handler(req, res) {
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (err) {
+    console.error("DB connection failed:", err);
+    return res.status(503).json({ ok: false, code: "DB_UNAVAILABLE" });
+  }
 
   const token = req.cookies.jwt;
   if (!token) {

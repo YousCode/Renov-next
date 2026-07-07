@@ -1,14 +1,19 @@
 // pages/api/protectedRoute.js
-import middleware from './middleware';
+import jwt from 'jsonwebtoken';
+import config from '../../config';
 
 export default function handler(req, res) {
-  middleware(req, res);
+  const token = req.cookies.jwt;
 
-  if (res.writableEnded) {
-    // Si le middleware a terminé la réponse, ne pas continuer
-    return;
+  if (!token || typeof token !== 'string') {
+    return res.status(401).json({ message: 'Authentication required' });
   }
 
-  // Logique de votre route protégée ici
-  res.status(200).json({ message: 'You have access to this protected route' });
+  try {
+    req.user = jwt.verify(token, config.secret);
+  } catch (err) {
+    return res.status(401).json({ message: 'Token verification failed' });
+  }
+
+  return res.status(200).json({ message: 'You have access to this protected route' });
 }

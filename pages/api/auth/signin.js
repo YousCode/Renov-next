@@ -2,16 +2,19 @@ import connectToDatabase from '../../../lib/mongodb';
 import User from '../../../models/user';
 import jwt from 'jsonwebtoken';
 import { setCookie } from 'cookies-next';
+import config from '../../../config';
 
-const COOKIE_MAX_AGE = 31557600000;
+// maxAge du cookie en SECONDES (1 an), aligné sur l'expiration du JWT
+const COOKIE_MAX_AGE = 31557600;
 const JWT_MAX_AGE = "1y";
-const config = {
-  secret: 'YOUR_SECRET_KEY',
-  ENVIRONMENT: process.env.NODE_ENV
-};
 
 export default async function handler(req, res) {
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (err) {
+    console.error("DB connection failed:", err);
+    return res.status(503).send({ ok: false, code: "DB_UNAVAILABLE" });
+  }
 
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -39,7 +42,7 @@ export default async function handler(req, res) {
     if (config.ENVIRONMENT === "development") {
       cookieOptions = { ...cookieOptions, secure: false, domain: "localhost", sameSite: "Lax" };
     } else {
-      cookieOptions = { ...cookieOptions, secure: true, sameSite: "none" };
+      cookieOptions = { ...cookieOptions, secure: true, sameSite: "lax" };
     }
 
     const token = jwt.sign({ _id: user.id, role: user.role }, config.secret, { expiresIn: JWT_MAX_AGE }); // Inclure le rôle dans le token

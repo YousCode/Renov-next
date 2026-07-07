@@ -3,16 +3,19 @@ import User from '../../../models/user';
 import jwt from 'jsonwebtoken';
 import { setCookie } from 'cookies-next';
 import { validatePassword } from '../../../utils/validatePassword'; // Assurez-vous d'avoir cette fonction utilitaire
+import config from '../../../config';
 
-const COOKIE_MAX_AGE = 31557600000;
+// maxAge du cookie en SECONDES (1 an), aligné sur l'expiration du JWT
+const COOKIE_MAX_AGE = 31557600;
 const JWT_MAX_AGE = "1y";
-const config = {
-  secret: 'YOUR_SECRET_KEY',
-  ENVIRONMENT: process.env.NODE_ENV
-};
 
 export default async function handler(req, res) {
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (err) {
+    console.error("DB connection failed:", err);
+    return res.status(503).send({ ok: false, code: "DB_UNAVAILABLE" });
+  }
 
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -52,14 +55,17 @@ export default async function handler(req, res) {
       if (config.ENVIRONMENT === "development") {
         cookieOptions = { ...cookieOptions, secure: false, domain: "localhost", sameSite: "Lax" };
       } else {
-        cookieOptions = { ...cookieOptions, secure: true, sameSite: "none" };
+        cookieOptions = { ...cookieOptions, secure: true, sameSite: "lax" };
       }
 
       token = jwt.sign({ _id: user._id }, config.secret, { expiresIn: JWT_MAX_AGE });
       setCookie('jwt', token, { req, res, ...cookieOptions });
     }
 
-    return res.status(200).send({ user, token, ok: true });
+    const safeUser = user.toObject();
+    delete safeUser.password;
+    delete safeUser.invitation_token;
+    return res.status(200).send({ user: safeUser, token, ok: true });
   } catch (error) {
     console.log("e", error);
     if (error.code === 11000) return res.status(409).send({ ok: false, code: "USER_ALREADY_REGISTERED" });

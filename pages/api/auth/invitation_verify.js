@@ -3,7 +3,12 @@ import User from '../../../models/user';
 import { capture } from '../../../sentry.js'; // Assurez-vous d'avoir cette fonction utilitaire
 
 export default async function handler(req, res) {
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (err) {
+    console.error("DB connection failed:", err);
+    return res.status(503).send({ ok: false, code: "DB_UNAVAILABLE" });
+  }
 
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);

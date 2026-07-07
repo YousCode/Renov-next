@@ -8,10 +8,16 @@ export default async function handler(req, res) {
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const q = String(req.query.q || "").trim();
+  // le frontend envoie ?searchTerm=, on accepte aussi ?q= pour compatibilité
+  const q = String(req.query.q || req.query.searchTerm || "").trim();
   if (!q) return res.status(400).json({ success: false, message: "Paramètre q requis" });
 
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (err) {
+    console.error("DB connection failed:", err);
+    return res.status(503).json({ success: false, message: "Database unavailable" });
+  }
 
   try {
     const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");

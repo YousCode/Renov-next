@@ -1,8 +1,18 @@
+import mongoose from "mongoose";
 import connectToDatabase from "../../../lib/mongodb";
 import Vente from "../../../models/ventes";
 
 export default async function handler(req, res) {
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (err) {
+    console.error("DB connection failed:", err);
+    return res.status(503).json({ success: false, message: "Database unavailable" });
+  }
+
+  if (!mongoose.isValidObjectId(req.query.id)) {
+    return res.status(400).json({ success: false, message: "Identifiant invalide" });
+  }
 
   switch (req.method) {
     case "GET":    return getVenteById(req, res);

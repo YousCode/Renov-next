@@ -2,7 +2,12 @@ import connectToDatabase from "../../../lib/mongodb";
 import Vente from "../../../models/ventes";
 
 export default async function handler(req, res) {
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (err) {
+    console.error("DB connection failed:", err);
+    return res.status(503).json({ success: false, message: "Database unavailable" });
+  }
 
   switch (req.method) {
     case "GET":  return getAllVentes(req, res);
@@ -38,9 +43,18 @@ async function getAllVentes(req, res) {
       };
     }
 
-    const ventes = await Vente.find(query).sort({ "DATE DE VENTE": -1 }).lean().exec();
+    // pagination optionnelle : ?limit=100&page=1 (sans limit, comportement inchangé)
+    const limit = Math.min(parseInt(req.query.limit, 10) || 0, 1000);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+
+    let find = Vente.find(query).sort({ "DATE DE VENTE": -1 });
+    if (limit > 0) find = find.skip((page - 1) * limit).limit(limit);
+
+    const ventes = await find.lean().exec();
+    const totalItems = limit > 0 ? await Vente.countDocuments(query) : ventes.length;
+
     res.setHeader("Cache-Control", "private, max-age=15, stale-while-revalidate=30");
-    return res.status(200).json({ success: true, data: ventes, totalItems: ventes.length });
+    return res.status(200).json({ success: true, data: ventes, totalItems });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

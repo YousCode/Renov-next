@@ -2,7 +2,12 @@ import connectToDatabase from '../../../lib/mongodb';
 import User from '../../../models/user';
 
 export default async function handler(req, res) {
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (err) {
+    console.error("DB connection failed:", err);
+    return res.status(503).json({ success: false, code: "DB_UNAVAILABLE" });
+  }
 
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
@@ -10,7 +15,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const users = await User.find({});
+    const users = await User.find({}).select('-password -invitation_token').lean();
     return res.status(200).json({ success: true, data: users });
   } catch (error) {
     console.error("Error fetching users:", error);

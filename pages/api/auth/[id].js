@@ -1,34 +1,46 @@
+import mongoose from 'mongoose';
 import connectToDatabase from '../../../lib/mongodb';
 import User from '../../../models/user';
 import { capture } from '../../../sentry.js'; // Assurez-vous d'avoir cette fonction utilitaire
 
 export default async function handler(req, res) {
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (err) {
+    console.error("DB connection failed:", err);
+    return res.status(503).send({ ok: false, code: "DB_UNAVAILABLE" });
+  }
 
   const { id } = req.query;
+  if (!mongoose.isValidObjectId(id)) {
+    return res.status(400).send({ ok: false, code: 'INVALID_ID' });
+  }
 
   if (req.method === 'GET') {
     try {
-      const user = await User.findOne({ _id: id });
+      const user = await User.findById(id).select('-password -invitation_token');
+      if (!user) return res.status(404).send({ ok: false, code: 'USER_NOT_FOUND' });
       return res.status(200).send({ ok: true, data: user });
     } catch (error) {
       capture(error);
-      return res.status(500).send({ ok: false, code: 'SERVER_ERROR', error });
+      return res.status(500).send({ ok: false, code: 'SERVER_ERROR' });
     }
   } else if (req.method === 'PUT') {
     try {
       const updates = req.body;
       if (updates.password) {
-        const user = await User.findOne({ _id: id });
+        const user = await User.findById(id);
+        if (!user) return res.status(404).send({ ok: false, code: 'USER_NOT_FOUND' });
         user.password = updates.password;
         await user.save();
         delete updates.password; // Remove the password from updates after hashing
       }
-      const user = await User.findByIdAndUpdate(id, updates, { new: true });
+      const user = await User.findByIdAndUpdate(id, updates, { new: true }).select('-password -invitation_token');
+      if (!user) return res.status(404).send({ ok: false, code: 'USER_NOT_FOUND' });
       return res.status(200).send({ ok: true, data: user });
     } catch (error) {
       capture(error);
-      return res.status(500).send({ ok: false, code: 'SERVER_ERROR', error });
+      return res.status(500).send({ ok: false, code: 'SERVER_ERROR' });
     }
   } else {
     res.setHeader('Allow', ['GET', 'PUT']);
