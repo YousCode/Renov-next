@@ -8,7 +8,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCalendarAlt, faSearch, faChartBar } from "@fortawesome/free-solid-svg-icons";
 
 const Dashboard = () => {
-  const user = useSelector((state) => state.auth ? state.auth.user : null);
+  const user = useSelector((state) => state.Auth?.user ?? null);
 
   // On retire la référence à t("…"), en mettant directement les chaînes
   const [statusFilterCalendar, setStatusFilterCalendar] = useState("À faire");

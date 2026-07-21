@@ -23,13 +23,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { password, email, name, phone, workspace_id, workspace_name } = req.body;
+    const { password, name, phone, workspace_id, workspace_name } = req.body;
+    // normaliser l'email pour éviter les comptes en double (Casse/espaces)
+    const email = String(req.body.email || "").trim().toLowerCase();
 
+    if (!email) return res.status(400).send({ ok: false, code: "EMAIL_REQUIRED" });
     if (!workspace_id) return res.status(400).send({ ok: false, code: "WORKSPACE_ID_REQUIRED" });
 
     if (password && !validatePassword(password)) return res.status(400).send({ ok: false, code: "PASSWORD_NOT_VALIDATED" });
 
-    let user = await User.findOne({ email });
+    const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    let user = await User.findOne({ email: { $regex: `^${escaped}$`, $options: "i" } });
 
     if (user && user.registered_at) return res.status(400).send({ ok: false, code: "USER_ALREADY_REGISTERED" });
 

@@ -25,7 +25,14 @@ export default async function handler(req, res) {
   if (!email || !password) return res.status(400).send({ ok: false, code: "EMAIL_AND_PASSWORD_REQUIRED" });
 
   try {
-    const user = await User.findOne({ email });
+    // correspondance exacte d'abord, puis insensible à la casse : la base
+    // contient des comptes historiques avec des majuscules dans l'email
+    const cleanEmail = String(email).trim();
+    let user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      const escaped = cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      user = await User.findOne({ email: { $regex: `^${escaped}$`, $options: "i" } });
+    }
     if (!user) {
       return res.status(401).send({ ok: false, code: "USER_NOT_EXISTS" });
     }
