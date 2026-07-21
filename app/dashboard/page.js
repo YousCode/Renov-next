@@ -30,7 +30,7 @@ const Dashboard = () => {
       <Navbar />
       <section
         className="flex flex-col items-center justify-center min-h-screen bg-cover bg-center"
-        style={{ backgroundImage: "url('/explore-bg.png')" }}
+        style={{ backgroundImage: "url('/explore-bg.jpg')" }}
       >
         <div className="z-10 p-4 w-full max-w-screen-md mx-auto space-y-10">
           {/* Section Planning */}

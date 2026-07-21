@@ -19,7 +19,10 @@ const ClientProvider = ({ children }) => {
           dispatch(setUser({ email, name, language, role })); // Passez uniquement les champs nécessaires
         }
       } catch (error) {
-        console.error("Failed to check auth:", error);
+        // 401 = simplement pas connecté : pas une erreur à logger
+        if (error?.response?.status !== 401) {
+          console.error("Failed to check auth:", error);
+        }
       }
     };
 

@@ -12,7 +12,6 @@ import React, {
   useRef,
 } from "react";
 import { useRouter } from "next/navigation";
-import Tesseract from "tesseract.js";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEdit,
@@ -319,6 +318,7 @@ const PaymentModal = ({ sale,payments,setPayments,onClose,onSave }) => {
     const file = e.target.files[0]; if(!file) return;
     setOcrLoading(true);
     try{
+      const { default: Tesseract } = await import("tesseract.js");
       const { data } = await Tesseract.recognize(file,"fra");
       const amt = extractAmount(data.text);
       if(amt) setNewPayment(p=>({...p,amount:amt})); else toast.warn("Aucun montant détecté");

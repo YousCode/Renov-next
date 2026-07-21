@@ -218,7 +218,7 @@ const ExplorerView = () => {
 
       <div className="lg:h-[calc(100vh-82px)] h-[calc(100vh-68px)] absolute lg:top-20 top-[68px] left-0 w-full">
         <div className="w-full h-[100%] bg-explore-gradient absolute bottom-0" />
-        <img alt="bg" src="/explore-bg.png" className="w-full h-full object-cover" />
+        <img alt="bg" src="/explore-bg.jpg" className="w-full h-full object-cover" />
       </div>
     </>
   );
